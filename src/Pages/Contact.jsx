@@ -7,12 +7,12 @@ const faqs = [
     a: "Our AI system analyzes body joint angles from uploaded cricket videos to evaluate technique and provide improvement suggestions.",
   },
   {
-    q: "What type of videos can I upload?",
-    a: "You can upload batting or bowling videos recorded from a side or front angle for best results.",
+    q: "What type of photos can I upload?",
+    a: "You can upload batting photos from a side or front angle for best results.",
   },
   {
-    q: "Is my video data secure?",
-    a: "Yes. All uploaded videos are securely stored and used only for performance analysis.",
+    q: "Is my photos data secure?",
+    a: "Yes. All uploaded photos are securely stored and used only for performance analysis.",
   },
 ];
 

@@ -446,25 +446,7 @@ export default function Picupload() {
             </button>
           </div>
 
-          {/* Message */}
-          {message && (
-            <div className={`pu-message ${msgType}`}>
-              {msgType === "success" && (
-                <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-              )}
-              {msgType === "error" && (
-                <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              )}
-              {msgType === "info" && (
-                <div className="spinner" style={{ borderColor: "rgba(37,99,235,0.3)", borderTopColor: "#7baeff" }} />
-              )}
-              {message}
-            </div>
-          )}
+
 
           {/* Hints */}
           <div className="pu-hints">

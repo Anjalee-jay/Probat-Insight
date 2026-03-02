@@ -1,12 +1,17 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "./AuthContext";
 
 export default function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { isLoggedIn, user, logout } = useAuth();
+
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrollToAbout, setScrollToAbout] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef(null);
 
   const navItems = [
     { name: "Home", path: "/" },
@@ -20,7 +25,6 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // After navigating to home, scroll to about once the page has rendered
   useEffect(() => {
     if (scrollToAbout && location.pathname === "/") {
       const section = document.getElementById("about");
@@ -30,6 +34,16 @@ export default function Navbar() {
       }
     }
   }, [location.pathname, scrollToAbout]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (profileRef.current && !profileRef.current.contains(e.target)) {
+        setProfileOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const handleNavigation = (path) => {
     setMenuOpen(false);
@@ -47,106 +61,45 @@ export default function Navbar() {
     }
   };
 
+  const handleLogout = () => {
+    logout();
+    setProfileOpen(false);
+    setMenuOpen(false);
+    navigate("/login");
+  };
+
   const isActive = (path) => location.pathname === path;
+
+  const getInitials = (name) => {
+    if (!name) return "U";
+    return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+  };
 
   return (
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap');
 
-        .navbar {
-          position: sticky;
-          top: 0;
-          z-index: 100;
-          font-family: 'Barlow', sans-serif;
-          transition: background 0.3s, box-shadow 0.3s, border-color 0.3s;
-        }
+        .navbar { position: sticky; top: 0; z-index: 100; font-family: 'Barlow', sans-serif; transition: background 0.3s, box-shadow 0.3s, border-color 0.3s; }
+        .navbar.scrolled { background: rgba(5, 8, 5, 0.92) !important; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 4px 32px rgba(0,0,0,0.4), 0 1px 0 rgba(66,255,78,0.15); }
+        .navbar.top { background: #000; border-bottom: 1px solid rgba(66,255,78,0.2); }
+        .navbar-inner { display: flex; align-items: center; justify-content: space-between; padding: 0 40px; height: 76px; max-width: 1400px; margin: 0 auto; position: relative; }
+        .nav-logo { height: 64px; width: auto; transition: filter 0.3s, transform 0.3s; flex-shrink: 0; cursor: pointer; }
+        .nav-logo:hover { filter: drop-shadow(0 0 10px rgba(66,255,78,0.5)); transform: scale(1.03); }
 
-        .navbar.scrolled {
-          background: rgba(5, 8, 5, 0.92) !important;
-          backdrop-filter: blur(16px);
-          -webkit-backdrop-filter: blur(16px);
-          box-shadow: 0 4px 32px rgba(0,0,0,0.4), 0 1px 0 rgba(66,255,78,0.15);
-        }
+        .nav-links { position: absolute; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 4px; }
 
-        .navbar.top {
-          background: #000;
-          border-bottom: 1px solid rgba(66,255,78,0.2);
-        }
-
-        .navbar-inner {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 0 40px;
-          height: 76px;
-          max-width: 1400px;
-          margin: 0 auto;
-          position: relative;
-        }
-
-        /* ── logo ── */
-        .nav-logo {
-          height: 64px;
-          width: auto;
-          transition: filter 0.3s, transform 0.3s;
-          flex-shrink: 0;
-        }
-        .nav-logo:hover {
-          filter: drop-shadow(0 0 10px rgba(66,255,78,0.5));
-          transform: scale(1.03);
-        }
-
-        /* ── center nav ── */
-        .nav-links {
-          position: absolute;
-          left: 50%;
-          transform: translateX(-50%);
-          display: flex;
-          align-items: center;
-          gap: 4px;
-        }
-
-        .nav-btn {
-          position: relative;
-          background: none;
-          border: none;
-          cursor: pointer;
-          font-family: 'Barlow', sans-serif;
-          font-size: 13px;
-          font-weight: 600;
-          letter-spacing: 0.1em;
-          text-transform: uppercase;
-          color: rgba(255,255,255,0.55);
-          padding: 8px 16px;
-          border-radius: 8px;
-          transition: color 0.2s, background 0.2s;
-        }
-        .nav-btn::after {
-          content: '';
-          position: absolute;
-          bottom: 4px;
-          left: 50%;
-          transform: translateX(-50%) scaleX(0);
-          width: calc(100% - 32px);
-          height: 1.5px;
-          background: #42FF4E;
-          border-radius: 2px;
-          transition: transform 0.25s cubic-bezier(0.22,1,0.36,1);
-        }
+        .nav-btn { position: relative; background: none; border: none; cursor: pointer; font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.55); padding: 8px 16px; border-radius: 8px; transition: color 0.2s, background 0.2s; }
+        .nav-btn::after { content: ''; position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%) scaleX(0); width: calc(100% - 32px); height: 1.5px; background: #42FF4E; border-radius: 2px; transition: transform 0.25s cubic-bezier(0.22,1,0.36,1); }
         .nav-btn:hover { color: #fff; background: rgba(255,255,255,0.05); }
         .nav-btn:hover::after { transform: translateX(-50%) scaleX(1); }
         .nav-btn.active { color: #42FF4E; }
         .nav-btn.active::after { transform: translateX(-50%) scaleX(1); }
 
-        /* ── right buttons ── */
-        .nav-right {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
+        .nav-right { display: flex; align-items: center; gap: 10px; }
 
-        .nav-login {
+        /* ✅ Login / Signup buttons fully white */
+        .nav-login, .nav-signup {
           font-family: 'Barlow', sans-serif;
           font-size: 13px;
           font-weight: 600;
@@ -156,161 +109,68 @@ export default function Navbar() {
           padding: 8px 20px;
           border-radius: 8px;
           border: 1px solid transparent;
+          color: #ffffff; /* fully white */
           background: none;
-          color: rgba(255,255,255,0.5);
           transition: color 0.2s;
         }
-        .nav-login:hover {
-          color: #fff;
-        }
-        .nav-login.active-link {
+        .nav-login:hover, .nav-signup:hover { color: #ffffff; }
+        .nav-login.active-link, .nav-signup.active-link {
           background: #42FF4E;
           color: #080c08;
           font-weight: 700;
           border-color: transparent;
           box-shadow: 0 4px 16px rgba(66,255,78,0.3);
         }
-        .nav-login.active-link:hover {
-          background: #5fff6a;
-          color: #080c08;
-        }
 
-        .nav-signup {
-          font-family: 'Barlow', sans-serif;
-          font-size: 13px;
-          font-weight: 600;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          text-decoration: none;
-          padding: 8px 22px;
-          border-radius: 8px;
-          background: none;
-          color: rgba(255,255,255,0.5);
-          border: 1px solid transparent;
-          transition: color 0.2s;
-        }
-        .nav-signup:hover {
-          color: #fff;
-        }
-        .nav-signup.active-link {
-          background: #42FF4E;
-          color: #080c08;
-          font-weight: 700;
-          border-color: transparent;
-          box-shadow: 0 4px 16px rgba(66,255,78,0.3);
-          transform: none;
-        }
-        .nav-signup.active-link:hover {
-          background: #5fff6a;
-          color: #080c08;
-        }
+        /* Profile avatar */
+        .profile-wrap { position: relative; }
+        .profile-icon-btn { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #42FF4E, #16a34a); border: 2px solid rgba(66,255,78,0.35); display: flex; align-items: center; justify-content: center; font-family: 'Bebas Neue', sans-serif; font-size: 15px; color: #080c08; font-weight: 700; cursor: pointer; letter-spacing: 0.5px; transition: all 0.2s; }
+        .profile-icon-btn:hover { border-color: #42FF4E; box-shadow: 0 0 16px rgba(66,255,78,0.35); transform: scale(1.06); }
 
-        /* ── mobile hamburger ── */
-        .hamburger {
-          display: none;
-          flex-direction: column;
-          justify-content: center;
-          gap: 5px;
-          background: none;
-          border: none;
-          cursor: pointer;
-          padding: 6px;
-          border-radius: 6px;
-          transition: background 0.2s;
-        }
+        .profile-dropdown { position: absolute; top: calc(100% + 12px); right: 0; min-width: 190px; background: #0d150d; border: 1px solid rgba(66,255,78,0.15); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); overflow: hidden; animation: dropIn 0.2s cubic-bezier(0.22,1,0.36,1); z-index: 200; }
+        @keyframes dropIn { from { opacity: 0; transform: translateY(-8px) scale(0.97); } to { opacity: 1; transform: none; } }
+        .dropdown-header { padding: 14px 16px 12px; border-bottom: 1px solid rgba(66,255,78,0.08); }
+        .dropdown-user-name { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 2px; }
+        .dropdown-user-email { font-size: 11px; color: rgba(255,255,255,0.35); }
+        .dropdown-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 16px; background: none; border: none; cursor: pointer; font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.55); text-align: left; transition: background 0.15s, color 0.15s; }
+        .dropdown-item:hover { background: rgba(66,255,78,0.07); color: #fff; }
+        .dropdown-divider { height: 1px; background: rgba(66,255,78,0.08); margin: 4px 0; }
+        .dropdown-logout { color: rgba(255,100,100,0.6) !important; }
+        .dropdown-logout:hover { background: rgba(255,80,80,0.07) !important; color: #ff6b6b !important; }
+
+        /* Hamburger */
+        .hamburger { display: none; flex-direction: column; justify-content: center; gap: 5px; background: none; border: none; cursor: pointer; padding: 6px; border-radius: 6px; transition: background 0.2s; }
         .hamburger:hover { background: rgba(66,255,78,0.08); }
-        .hamburger span {
-          display: block;
-          width: 22px; height: 1.5px;
-          background: #42FF4E;
-          border-radius: 2px;
-          transition: transform 0.25s, opacity 0.25s;
-          transform-origin: center;
-        }
+        .hamburger span { display: block; width: 22px; height: 1.5px; background: #42FF4E; border-radius: 2px; transition: transform 0.25s, opacity 0.25s; transform-origin: center; }
         .hamburger.open span:nth-child(1) { transform: translateY(6.5px) rotate(45deg); }
         .hamburger.open span:nth-child(2) { opacity: 0; transform: scaleX(0); }
         .hamburger.open span:nth-child(3) { transform: translateY(-6.5px) rotate(-45deg); }
 
-        /* ── mobile menu ── */
-        .mobile-menu {
-          display: none;
-          position: absolute;
-          top: 76px; left: 0; right: 0;
-          background: rgba(5,8,5,0.97);
-          backdrop-filter: blur(20px);
-          border-bottom: 1px solid rgba(66,255,78,0.15);
-          padding: 16px 24px 24px;
-          flex-direction: column;
-          gap: 4px;
-          animation: slideDown 0.25s ease;
-        }
-        @keyframes slideDown {
-          from { opacity:0; transform: translateY(-8px); }
-          to   { opacity:1; transform: none; }
-        }
+        /* Mobile menu */
+        .mobile-menu { display: none; position: absolute; top: 76px; left: 0; right: 0; background: rgba(5,8,5,0.97); backdrop-filter: blur(20px); border-bottom: 1px solid rgba(66,255,78,0.15); padding: 16px 24px 24px; flex-direction: column; gap: 4px; animation: slideDown 0.25s ease; }
+        @keyframes slideDown { from { opacity:0; transform: translateY(-8px); } to { opacity:1; transform: none; } }
         .mobile-menu.open { display: flex; }
-
-        .mobile-nav-btn {
-          background: none; border: none; cursor: pointer;
-          font-family: 'Barlow', sans-serif;
-          font-size: 14px; font-weight: 600;
-          letter-spacing: 0.1em; text-transform: uppercase;
-          color: rgba(255,255,255,0.5);
-          padding: 12px 16px;
-          border-radius: 8px;
-          text-align: left;
-          transition: color 0.2s, background 0.2s;
-        }
+        .mobile-nav-btn { background: none; border: none; cursor: pointer; font-family: 'Barlow', sans-serif; font-size: 14px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.5); padding: 12px 16px; border-radius: 8px; text-align: left; transition: color 0.2s, background 0.2s; }
         .mobile-nav-btn:hover, .mobile-nav-btn.active { color: #42FF4E; background: rgba(66,255,78,0.06); }
-
-        .mobile-divider {
-          height: 1px;
-          background: rgba(66,255,78,0.08);
-          margin: 8px 0;
-        }
-
-        .mobile-auth {
-          display: flex; gap: 10px; padding: 4px 16px 0;
-        }
-        .mobile-auth a {
-          flex: 1; text-align: center;
-          font-family: 'Barlow', sans-serif;
-          font-size: 13px; font-weight: 700;
-          letter-spacing: 0.08em; text-transform: uppercase;
-          text-decoration: none;
-          padding: 10px;
-          border-radius: 8px;
-          transition: all 0.2s;
-        }
-        .mob-login {
-          color: rgba(255,255,255,0.6) !important;
-          border: 1px solid rgba(66,255,78,0.2);
-        }
+        .mobile-divider { height: 1px; background: rgba(66,255,78,0.08); margin: 8px 0; }
+        .mobile-auth { display: flex; gap: 10px; padding: 4px 16px 0; }
+        .mobile-auth a { flex: 1; text-align: center; font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; padding: 10px; border-radius: 8px; transition: all 0.2s; }
+        .mob-login { color: #ffffff !important; border: 1px solid rgba(66,255,78,0.2); }
         .mob-login:hover { color: #42FF4E !important; border-color: rgba(66,255,78,0.5) !important; }
-        .mob-signup {
-          background: #42FF4E;
-          color: #080c08 !important;
-        }
+        .mob-signup { background: #42FF4E; color: #080c08 !important; }
         .mob-signup:hover { background: #5fff6a; }
 
-        @media(max-width: 768px) {
-          .nav-links { display: none; }
-          .nav-right  { display: none; }
-          .hamburger  { display: flex; }
-          .navbar-inner { padding: 0 24px; }
-        }
+        @media(max-width: 768px) { .nav-links { display: none; } .nav-right { display: none; } .hamburger { display: flex; } .navbar-inner { padding: 0 24px; } }
       `}</style>
 
       <nav className={`navbar ${scrolled ? "scrolled" : "top"}`}>
         <div className="navbar-inner">
-
           {/* Logo */}
           <img
             src={require("../images/logo.png")}
             alt="ProBat Insight Logo"
             className="nav-logo"
             onClick={() => handleNavigation("/")}
-            style={{ cursor: "pointer" }}
           />
 
           {/* Center Nav */}
@@ -326,20 +186,50 @@ export default function Navbar() {
             ))}
           </div>
 
-          {/* Right Buttons */}
+          {/* Right Side */}
           <div className="nav-right">
-            <Link
-              to="/login"
-              className={`nav-login ${isActive("/login") ? "active-link" : ""}`}
-            >
-              Login
-            </Link>
-            <Link
-              to="/signup"
-              className={`nav-signup ${isActive("/signup") ? "active-link" : ""}`}
-            >
-              Sign Up
-            </Link>
+            {isLoggedIn ? (
+              <div className="profile-wrap" ref={profileRef}>
+                <button
+                  className="profile-icon-btn"
+                  onClick={() => setProfileOpen((o) => !o)}
+                  aria-label="Open profile menu"
+                >
+                  {getInitials(user?.name)}
+                </button>
+
+                {profileOpen && (
+                  <div className="profile-dropdown">
+                    <div className="dropdown-header">
+                      <div className="dropdown-user-name">{user?.name || "User"}</div>
+                      <div className="dropdown-user-email">{user?.email || ""}</div>
+                    </div>
+
+                    {/* My Profile → navigate to /profile */}
+                    <button
+                      className="dropdown-item"
+                      onClick={() => {
+                        setProfileOpen(false);
+                        navigate("/profile");
+                      }}
+                    >
+                      My Profile
+                    </button>
+
+                    <div className="dropdown-divider" />
+
+                    <button className="dropdown-item dropdown-logout" onClick={handleLogout}>
+                      Sign Out
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <Link to="/login" className={`nav-login ${isActive("/login") ? "active-link" : ""}`}>Login</Link>
+                <Link to="/signup" className={`nav-signup ${isActive("/signup") ? "active-link" : ""}`}>Sign Up</Link>
+              </>
+            )}
           </div>
 
           {/* Hamburger */}
@@ -363,11 +253,39 @@ export default function Navbar() {
               {item.name}
             </button>
           ))}
+
           <div className="mobile-divider" />
-          <div className="mobile-auth">
-            <Link to="/login" className="mob-login" onClick={() => setMenuOpen(false)}>Login</Link>
-            <Link to="/signup" className="mob-signup" onClick={() => setMenuOpen(false)}>Sign Up</Link>
-          </div>
+
+          {isLoggedIn ? (
+            <>
+              <div className="mobile-profile-row">
+                <div className="mobile-profile-avatar">{getInitials(user?.name)}</div>
+                <div>
+                  <div className="mobile-profile-name">{user?.name || "User"}</div>
+                  <div className="mobile-profile-email">{user?.email || ""}</div>
+                </div>
+              </div>
+
+              <button
+                className="mobile-nav-btn"
+                onClick={() => {
+                  setMenuOpen(false);
+                  navigate("/profile");
+                }}
+              >
+                My Profile
+              </button>
+
+              <button className="mob-logout" onClick={handleLogout}>
+                Sign Out
+              </button>
+            </>
+          ) : (
+            <div className="mobile-auth">
+              <Link to="/login" className="mob-login" onClick={() => setMenuOpen(false)}>Login</Link>
+              <Link to="/signup" className="mob-signup" onClick={() => setMenuOpen(false)}>Sign Up</Link>
+            </div>
+          )}
         </div>
       </nav>
     </>
