@@ -11,7 +11,21 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrollToAbout, setScrollToAbout] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
   const profileRef = useRef(null);
+  const notifRef = useRef(null);
+
+  // Mock notifications — replace with real data from your backend
+  const [notifications, setNotifications] = useState([
+    { id: 1, title: "New analysis ready", desc: "Your batting report for Match #14 is ready.", time: "2m ago", read: false },
+    { id: 2, title: "Welcome to ProBat!", desc: "Start exploring player insights and stats.", time: "1h ago", read: false },
+    { id: 3, title: "Report updated", desc: "Weekly performance summary has been refreshed.", time: "3h ago", read: true },
+  ]);
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const markAllRead = () => setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  const markRead = (id) => setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
 
   const navItems = [
     { name: "Home", path: "/" },
@@ -37,9 +51,8 @@ export default function Navbar() {
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (profileRef.current && !profileRef.current.contains(e.target)) {
-        setProfileOpen(false);
-      }
+      if (profileRef.current && !profileRef.current.contains(e.target)) setProfileOpen(false);
+      if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -64,6 +77,7 @@ export default function Navbar() {
   const handleLogout = () => {
     logout();
     setProfileOpen(false);
+    setNotifOpen(false);
     setMenuOpen(false);
     navigate("/login");
   };
@@ -98,29 +112,108 @@ export default function Navbar() {
 
         .nav-right { display: flex; align-items: center; gap: 10px; }
 
-        /* ✅ Login / Signup buttons fully white */
         .nav-login, .nav-signup {
-          font-family: 'Barlow', sans-serif;
-          font-size: 13px;
-          font-weight: 600;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          text-decoration: none;
-          padding: 8px 20px;
-          border-radius: 8px;
-          border: 1px solid transparent;
-          color: #ffffff; /* fully white */
-          background: none;
-          transition: color 0.2s;
+          font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 600; letter-spacing: 0.08em;
+          text-transform: uppercase; text-decoration: none; padding: 8px 20px; border-radius: 8px;
+          border: 1px solid transparent; color: #ffffff; background: none; transition: color 0.2s;
         }
         .nav-login:hover, .nav-signup:hover { color: #ffffff; }
         .nav-login.active-link, .nav-signup.active-link {
-          background: #42FF4E;
-          color: #080c08;
-          font-weight: 700;
-          border-color: transparent;
+          background: #42FF4E; color: #080c08; font-weight: 700; border-color: transparent;
           box-shadow: 0 4px 16px rgba(66,255,78,0.3);
         }
+
+        /* ── Notification Bell ── */
+        .notif-wrap { position: relative; }
+        .notif-btn {
+          position: relative; width: 40px; height: 40px; border-radius: 50%;
+          background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer; transition: all 0.2s;
+        }
+        .notif-btn:hover { background: rgba(66,255,78,0.08); border-color: rgba(66,255,78,0.35); box-shadow: 0 0 12px rgba(66,255,78,0.2); }
+        .notif-btn svg { width: 18px; height: 18px; stroke: rgba(255,255,255,0.6); transition: stroke 0.2s; }
+        .notif-btn:hover svg { stroke: #42FF4E; }
+        .notif-badge {
+          position: absolute; top: -3px; right: -3px;
+          min-width: 17px; height: 17px; padding: 0 4px;
+          background: #42FF4E; border-radius: 999px;
+          font-family: 'Barlow', sans-serif; font-size: 10px; font-weight: 700;
+          color: #080c08; display: flex; align-items: center; justify-content: center;
+          border: 2px solid #000; line-height: 1;
+          animation: badgePop 0.3s cubic-bezier(0.22,1,0.36,1);
+        }
+        @keyframes badgePop { from { transform: scale(0); } to { transform: scale(1); } }
+
+        /* Bell ring animation when there are unread */
+        @keyframes bellRing {
+          0%,100% { transform: rotate(0deg); }
+          15% { transform: rotate(14deg); }
+          30% { transform: rotate(-10deg); }
+          45% { transform: rotate(8deg); }
+          60% { transform: rotate(-5deg); }
+          75% { transform: rotate(3deg); }
+        }
+        .notif-btn.has-unread svg { animation: bellRing 2.5s ease 0.5s; stroke: #42FF4E; }
+
+        /* Notification dropdown */
+        .notif-dropdown {
+          position: absolute; top: calc(100% + 12px); right: 0; width: 320px;
+          background: #0d150d; border: 1px solid rgba(66,255,78,0.15); border-radius: 14px;
+          box-shadow: 0 20px 60px rgba(0,0,0,0.7); overflow: hidden;
+          animation: dropIn 0.2s cubic-bezier(0.22,1,0.36,1); z-index: 200;
+        }
+        @keyframes dropIn { from { opacity: 0; transform: translateY(-8px) scale(0.97); } to { opacity: 1; transform: none; } }
+
+        .notif-header {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 14px 16px 12px; border-bottom: 1px solid rgba(66,255,78,0.08);
+        }
+        .notif-header-title { font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 0.05em; text-transform: uppercase; }
+        .notif-mark-all {
+          background: none; border: none; cursor: pointer;
+          font-family: 'Barlow', sans-serif; font-size: 11px; font-weight: 600;
+          color: #42FF4E; letter-spacing: 0.04em; opacity: 0.8; transition: opacity 0.2s;
+        }
+        .notif-mark-all:hover { opacity: 1; }
+
+        .notif-list { max-height: 300px; overflow-y: auto; }
+        .notif-list::-webkit-scrollbar { width: 4px; }
+        .notif-list::-webkit-scrollbar-track { background: transparent; }
+        .notif-list::-webkit-scrollbar-thumb { background: rgba(66,255,78,0.2); border-radius: 4px; }
+
+        .notif-item {
+          display: flex; align-items: flex-start; gap: 10px;
+          padding: 12px 16px; cursor: pointer; transition: background 0.15s;
+          border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .notif-item:last-child { border-bottom: none; }
+        .notif-item:hover { background: rgba(66,255,78,0.05); }
+        .notif-dot {
+          width: 8px; height: 8px; border-radius: 50%; background: #42FF4E;
+          flex-shrink: 0; margin-top: 5px; box-shadow: 0 0 6px rgba(66,255,78,0.5);
+        }
+        .notif-dot.read { background: transparent; border: 1px solid rgba(255,255,255,0.15); box-shadow: none; }
+        .notif-content { flex: 1; }
+        .notif-title { font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 2px; }
+        .notif-desc { font-size: 11px; color: rgba(255,255,255,0.4); line-height: 1.5; }
+        .notif-time { font-size: 10px; color: rgba(66,255,78,0.5); margin-top: 4px; font-weight: 600; letter-spacing: 0.04em; }
+
+        .notif-empty { padding: 32px 16px; text-align: center; }
+        .notif-empty-icon { font-size: 28px; margin-bottom: 8px; opacity: 0.4; }
+        .notif-empty-text { font-size: 13px; color: rgba(255,255,255,0.3); }
+
+        .notif-footer {
+          padding: 10px 16px; border-top: 1px solid rgba(66,255,78,0.08);
+          text-align: center;
+        }
+        .notif-view-all {
+          background: none; border: none; cursor: pointer;
+          font-family: 'Barlow', sans-serif; font-size: 12px; font-weight: 600;
+          color: rgba(66,255,78,0.7); letter-spacing: 0.06em; text-transform: uppercase;
+          transition: color 0.2s;
+        }
+        .notif-view-all:hover { color: #42FF4E; }
 
         /* Profile avatar */
         .profile-wrap { position: relative; }
@@ -128,7 +221,6 @@ export default function Navbar() {
         .profile-icon-btn:hover { border-color: #42FF4E; box-shadow: 0 0 16px rgba(66,255,78,0.35); transform: scale(1.06); }
 
         .profile-dropdown { position: absolute; top: calc(100% + 12px); right: 0; min-width: 190px; background: #0d150d; border: 1px solid rgba(66,255,78,0.15); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); overflow: hidden; animation: dropIn 0.2s cubic-bezier(0.22,1,0.36,1); z-index: 200; }
-        @keyframes dropIn { from { opacity: 0; transform: translateY(-8px) scale(0.97); } to { opacity: 1; transform: none; } }
         .dropdown-header { padding: 14px 16px 12px; border-bottom: 1px solid rgba(66,255,78,0.08); }
         .dropdown-user-name { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 2px; }
         .dropdown-user-email { font-size: 11px; color: rgba(255,255,255,0.35); }
@@ -160,6 +252,16 @@ export default function Navbar() {
         .mob-signup { background: #42FF4E; color: #080c08 !important; }
         .mob-signup:hover { background: #5fff6a; }
 
+        /* Mobile notifications row */
+        .mobile-notif-row {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 10px 16px; border-radius: 8px; cursor: pointer;
+          transition: background 0.15s;
+        }
+        .mobile-notif-row:hover { background: rgba(66,255,78,0.06); }
+        .mobile-notif-label { font-family: 'Barlow', sans-serif; font-size: 14px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.5); }
+        .mobile-notif-badge { background: #42FF4E; color: #080c08; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 999px; }
+
         @media(max-width: 768px) { .nav-links { display: none; } .nav-right { display: none; } .hamburger { display: flex; } .navbar-inner { padding: 0 24px; } }
       `}</style>
 
@@ -189,41 +291,101 @@ export default function Navbar() {
           {/* Right Side */}
           <div className="nav-right">
             {isLoggedIn ? (
-              <div className="profile-wrap" ref={profileRef}>
-                <button
-                  className="profile-icon-btn"
-                  onClick={() => setProfileOpen((o) => !o)}
-                  aria-label="Open profile menu"
-                >
-                  {getInitials(user?.name)}
-                </button>
+              <>
+                {/* ── Notification Bell ── */}
+                <div className="notif-wrap" ref={notifRef}>
+                  <button
+                    className={`notif-btn ${unreadCount > 0 ? "has-unread" : ""}`}
+                    onClick={() => { setNotifOpen((o) => !o); setProfileOpen(false); }}
+                    aria-label="Notifications"
+                  >
+                    {/* Bell SVG */}
+                    <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                    </svg>
+                    {unreadCount > 0 && (
+                      <span className="notif-badge">{unreadCount > 9 ? "9+" : unreadCount}</span>
+                    )}
+                  </button>
 
-                {profileOpen && (
-                  <div className="profile-dropdown">
-                    <div className="dropdown-header">
-                      <div className="dropdown-user-name">{user?.name || "User"}</div>
-                      <div className="dropdown-user-email">{user?.email || ""}</div>
+                  {notifOpen && (
+                    <div className="notif-dropdown">
+                      <div className="notif-header">
+                        <span className="notif-header-title">Notifications</span>
+                        {unreadCount > 0 && (
+                          <button className="notif-mark-all" onClick={markAllRead}>
+                            Mark all read
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="notif-list">
+                        {notifications.length === 0 ? (
+                          <div className="notif-empty">
+                            <div className="notif-empty-icon">🔔</div>
+                            <div className="notif-empty-text">No notifications yet</div>
+                          </div>
+                        ) : (
+                          notifications.map((n) => (
+                            <div
+                              key={n.id}
+                              className="notif-item"
+                              onClick={() => markRead(n.id)}
+                            >
+                              <div className={`notif-dot ${n.read ? "read" : ""}`} />
+                              <div className="notif-content">
+                                <div className="notif-title">{n.title}</div>
+                                <div className="notif-desc">{n.desc}</div>
+                                <div className="notif-time">{n.time}</div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      <div className="notif-footer">
+                        <button
+                          className="notif-view-all"
+                          onClick={() => { setNotifOpen(false); navigate("/notifications"); }}
+                        >
+                          View All Notifications
+                        </button>
+                      </div>
                     </div>
+                  )}
+                </div>
 
-                    {/* My Profile → navigate to /profile */}
-                    <button
-                      className="dropdown-item"
-                      onClick={() => {
-                        setProfileOpen(false);
-                        navigate("/profile");
-                      }}
-                    >
-                      My Profile
-                    </button>
+                {/* Profile Avatar */}
+                <div className="profile-wrap" ref={profileRef}>
+                  <button
+                    className="profile-icon-btn"
+                    onClick={() => { setProfileOpen((o) => !o); setNotifOpen(false); }}
+                    aria-label="Open profile menu"
+                  >
+                    {getInitials(user?.name)}
+                  </button>
 
-                    <div className="dropdown-divider" />
-
-                    <button className="dropdown-item dropdown-logout" onClick={handleLogout}>
-                      Sign Out
-                    </button>
-                  </div>
-                )}
-              </div>
+                  {profileOpen && (
+                    <div className="profile-dropdown">
+                      <div className="dropdown-header">
+                        <div className="dropdown-user-name">{user?.name || "User"}</div>
+                        <div className="dropdown-user-email">{user?.email || ""}</div>
+                      </div>
+                      <button
+                        className="dropdown-item"
+                        onClick={() => { setProfileOpen(false); navigate("/profile"); }}
+                      >
+                        My Profile
+                      </button>
+                      <div className="dropdown-divider" />
+                      <button className="dropdown-item dropdown-logout" onClick={handleLogout}>
+                        Sign Out
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
             ) : (
               <>
                 <Link to="/login" className={`nav-login ${isActive("/login") ? "active-link" : ""}`}>Login</Link>
@@ -258,20 +420,20 @@ export default function Navbar() {
 
           {isLoggedIn ? (
             <>
-              <div className="mobile-profile-row">
-                <div className="mobile-profile-avatar">{getInitials(user?.name)}</div>
-                <div>
-                  <div className="mobile-profile-name">{user?.name || "User"}</div>
-                  <div className="mobile-profile-email">{user?.email || ""}</div>
-                </div>
+              {/* Mobile Notifications Row */}
+              <div
+                className="mobile-notif-row"
+                onClick={() => { setMenuOpen(false); navigate("/notifications"); }}
+              >
+                <span className="mobile-notif-label">🔔 Notifications</span>
+                {unreadCount > 0 && (
+                  <span className="mobile-notif-badge">{unreadCount}</span>
+                )}
               </div>
 
               <button
                 className="mobile-nav-btn"
-                onClick={() => {
-                  setMenuOpen(false);
-                  navigate("/profile");
-                }}
+                onClick={() => { setMenuOpen(false); navigate("/profile"); }}
               >
                 My Profile
               </button>
