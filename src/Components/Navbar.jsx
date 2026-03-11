@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "./AuthContext";
+import adminLogo from "../images/Adminlogo.png";
 
 export default function Navbar() {
   const location = useLocation();
@@ -98,7 +99,7 @@ export default function Navbar() {
         .navbar.scrolled { background: rgba(5, 8, 5, 0.92) !important; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 4px 32px rgba(0,0,0,0.4), 0 1px 0 rgba(66,255,78,0.15); }
         .navbar.top { background: #000; border-bottom: 1px solid rgba(66,255,78,0.2); }
         .navbar-inner { display: flex; align-items: center; justify-content: space-between; padding: 0 40px; height: 76px; max-width: 1400px; margin: 0 auto; position: relative; }
-        .nav-logo { height: 64px; width: auto; transition: filter 0.3s, transform 0.3s; flex-shrink: 0; cursor: pointer; }
+        .nav-logo { height: 64px; width: auto; transition: filter 0.3s, transform 0.3s; flex-shrink: 0; cursor: pointer; margin-top: 6px; margin-left: -10px; }
         .nav-logo:hover { filter: drop-shadow(0 0 10px rgba(66,255,78,0.5)); transform: scale(1.03); }
 
         .nav-links { position: absolute; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 4px; }
@@ -269,7 +270,7 @@ export default function Navbar() {
         <div className="navbar-inner">
           {/* Logo */}
           <img
-            src={require("../images/logo.png")}
+            src={adminLogo}
             alt="ProBat Insight Logo"
             className="nav-logo"
             onClick={() => handleNavigation("/")}

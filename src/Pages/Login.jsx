@@ -1,20 +1,36 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "../Components/ThemeContext";
-import { useAuth } from "../Components/AuthContext"; // ✅ ADD THIS
+import { useAuth } from "../Components/AuthContext";
 
 export default function Login() {
   const navigate = useNavigate();
   const { isDarkMode } = useTheme();
-  const { login } = useAuth(); // ✅ ADD THIS
+  const { login } = useAuth();
   const [showPass, setShowPass] = useState(false);
   const [focused, setFocused] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  // ✅ Handle Sign In
-  const handleSignIn = (e) => {
+  const handleSignIn = async (e) => {
     e.preventDefault();
-    login({ name: "Jamie Martinez", email: "jamie@example.com" }); // pass real user data when you have auth
-    navigate("/");
+    setErrorMessage("");
+    setIsSubmitting(true);
+
+    try {
+      const loggedInUser = await login({ email, password });
+      if (loggedInUser?.role === "admin") {
+        navigate("/dashboard");
+      } else {
+        navigate("/");
+      }
+    } catch (error) {
+      setErrorMessage(error.message || "Unable to sign in. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // ✅ Handle Create Account
@@ -287,6 +303,9 @@ export default function Login() {
                     type="email"
                     placeholder="you@example.com"
                     className={`field-input${!isDarkMode ? " light" : ""}`}
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    required
                     onFocus={() => setFocused("email")}
                     onBlur={() => setFocused("")}
                   />
@@ -302,6 +321,9 @@ export default function Login() {
                     type={showPass ? "text" : "password"}
                     placeholder="••••••••"
                     className={`field-input${!isDarkMode ? " light" : ""}`}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
                     onFocus={() => setFocused("pass")}
                     onBlur={() => setFocused("")}
                   />
@@ -329,8 +351,12 @@ export default function Login() {
                 </div>
               </div>
 
-              <button type="submit" className="submit-btn">
-                Sign In
+              {errorMessage && (
+                <p style={{ color: "#ef4444", fontSize: "12px", marginTop: "4px" }}>{errorMessage}</p>
+              )}
+
+              <button type="submit" className="submit-btn" disabled={isSubmitting}>
+                {isSubmitting ? "Signing In..." : "Sign In"}
                 <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
                 </svg>

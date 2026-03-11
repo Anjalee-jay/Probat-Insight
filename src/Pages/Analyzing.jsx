@@ -21,12 +21,12 @@ export default function Analyzing() {
   const navigate = useNavigate();
   const canvasRef = useRef(null);
   const animRef = useRef(null);
+  const scanLineRef = useRef(0);
 
   const [stage, setStage] = useState(0);
   const [progress, setProgress] = useState(0);
   const [metrics, setMetrics] = useState(METRICS.map(() => 0));
   const [completedStages, setCompletedStages] = useState([]);
-  const [scanLine, setScanLine] = useState(0);
 
   /* ── Progress ── */
   useEffect(() => {
@@ -73,7 +73,7 @@ export default function Analyzing() {
     let pos = 0;
     const id = setInterval(() => {
       pos = (pos + 1) % 100;
-      setScanLine(pos);
+      scanLineRef.current = pos;
     }, 20);
     return () => clearInterval(id);
   }, []);
@@ -136,7 +136,7 @@ export default function Analyzing() {
       }));
 
       // Scan line highlight
-      const scanY = (scanLine / 100) * H;
+      const scanY = (scanLineRef.current / 100) * H;
 
       // Glow bones
       bones.forEach(([a, b]) => {
