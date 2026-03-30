@@ -68,3 +68,29 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 ### `npm run build` fails to minify
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+
+## Python ML Environment (TensorFlow)
+
+This project also uses a Python environment for ML dependencies.
+
+- Use the workspace environment at `.venv313` (Python 3.13).
+- Do not use Python 3.14 for TensorFlow installation in this project.
+
+### Activate environment (PowerShell)
+
+```powershell
+.\.venv313\Scripts\Activate.ps1
+```
+
+### Install/refresh ML packages
+
+```powershell
+python -m pip install --upgrade pip setuptools wheel
+pip install tensorflow keras numpy matplotlib
+```
+
+### Quick verification
+
+```powershell
+python -c "import tensorflow as tf; print(tf.__version__)"
+```

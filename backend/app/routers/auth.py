@@ -46,6 +46,10 @@ def register(payload: RegisterRequest):
         "password_hash": hash_password(payload.password),
         "role": normalized_role,
         "initials": _build_initials(payload.name),
+        "dob": payload.dob,
+        "gender": payload.gender,
+        "phone": payload.phone,
+        "avatar": payload.avatar,
     }
     try:
         users_collection.insert_one(user_doc)
@@ -60,6 +64,10 @@ def register(payload: RegisterRequest):
         email=user_doc["email"],
         role=user_doc["role"],
         initials=user_doc["initials"],
+        dob=user_doc.get("dob"),
+        gender=user_doc.get("gender"),
+        phone=user_doc.get("phone"),
+        avatar=user_doc.get("avatar"),
     )
     token = create_access_token({"sub": user.email, "role": user.role})
     return AuthResponse(access_token=token, user=user)
@@ -86,6 +94,10 @@ def login(payload: LoginRequest):
             email=user_doc["email"],
             role=user_doc.get("role", "user"),
             initials=user_doc.get("initials") or _build_initials(user_doc["name"]),
+            dob=user_doc.get("dob"),
+            gender=user_doc.get("gender"),
+            phone=user_doc.get("phone"),
+            avatar=user_doc.get("avatar"),
         )
         token = create_access_token({"sub": user.email, "role": user.role})
         return AuthResponse(access_token=token, user=user)

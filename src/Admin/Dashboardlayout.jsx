@@ -1,6 +1,69 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Sidebar, { NAV_ITEMS } from "../Components/Sidebar";
 import AdminNavbar from "../Components/AdminNavbar";
+import { fetchUsers } from "../services/usersApi";
+
+const UPLOADS_STORAGE_KEY = "probat-admin-uploads";
+
+function getStoredUploads() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const raw = window.localStorage.getItem(UPLOADS_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function getWeekStart(dateInput) {
+  const date = new Date(dateInput);
+  date.setHours(0, 0, 0, 0);
+  const mondayOffset = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() - mondayOffset);
+  return date;
+}
+
+function buildWeeklyAnalysisRows(uploads) {
+  const dayCounts = new Map();
+
+  uploads.forEach((upload) => {
+    const parsedDate = upload?.uploadedAt ? new Date(upload.uploadedAt) : null;
+    if (!parsedDate || Number.isNaN(parsedDate.getTime())) {
+      return;
+    }
+
+    const key = getWeekStart(parsedDate).toISOString().slice(0, 10);
+    dayCounts.set(key, (dayCounts.get(key) || 0) + 1);
+  });
+
+  const rows = [];
+  const currentWeekStart = getWeekStart(new Date());
+
+  for (let i = 7; i >= 0; i -= 1) {
+    const weekStart = new Date(currentWeekStart);
+    weekStart.setDate(currentWeekStart.getDate() - i * 7);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    const key = weekStart.toISOString().slice(0, 10);
+
+    rows.push({
+      key,
+      weekLabel: weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      rangeLabel: `${weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
+      count: dayCounts.get(key) || 0,
+    });
+  }
+
+  return rows;
+}
 
 /* ── Font import ─────────────────────────────────────────────────────────── */
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Syne:wght@700;800&family=Outfit:wght@400;500;600;700;800&display=swap');`;
@@ -18,8 +81,8 @@ const STAT_CARDS = [
     bar:      "bg-emerald-500",
   },
   {
-    label: "Active Users",
-    sub: "Currently online",
+    label: "Total Users",
+    sub: "All registered",
     iconPath: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z",
     iconBg:   "bg-blue-500",
     iconRing: "ring-blue-100",
@@ -28,8 +91,8 @@ const STAT_CARDS = [
     bar:      "bg-blue-500",
   },
   {
-    label: "Uploads Today",
-    sub: "Images processed",
+    label: "Total Uploads",
+    sub: "All time",
     iconPath: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12",
     iconBg:   "bg-violet-500",
     iconRing: "ring-violet-100",
@@ -39,8 +102,7 @@ const STAT_CARDS = [
   },
 ];
 
-const TABLE_COLS  = ["User", "Role", "Analyses", "Status"];
-const CHART_DAYS  = ["M","T","W","T","F","S","S","M","T","W","T","F","S","T"];
+const USER_TABLE_COLS  = ["User", "Role", "Analyses", "Status"];
 
 /* ── Helper: SVG icon ────────────────────────────────────────────────────── */
 function Ico({ d, cls = "w-5 h-5", sw = "1.7" }) {
@@ -88,13 +150,98 @@ function SectionHead({ title, sub, action }) {
 
 export default function Dashboardlayout() {
   const [active] = useState("dashboard");
+  const navigate = useNavigate();
+  const [dashboardUsers, setDashboardUsers] = useState([]);
+  const [dashboardUploads, setDashboardUploads] = useState([]);
+
+  const [statsData, setStatsData] = useState({
+    totalUsers: null,
+    totalAnalyses: null,
+    totalUploads: null,
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadStats = async () => {
+      const uploads = getStoredUploads();
+      const uploadsCount = uploads.length;
+      setDashboardUploads(uploads);
+
+      try {
+        const users = await fetchUsers();
+        const totalAnalyses = users.reduce((sum, user) => sum + Math.max(0, Number(user.analyses) || 0), 0);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setStatsData({
+          totalUsers: users.length,
+          totalAnalyses,
+          totalUploads: uploadsCount,
+        });
+        setDashboardUsers(users.slice(0, 6));
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setStatsData({
+          totalUsers: "—",
+          totalAnalyses: "—",
+          totalUploads: uploadsCount,
+        });
+        setDashboardUsers([]);
+      }
+    };
+
+    loadStats();
+    const refreshTimer = window.setInterval(loadStats, 30000);
+
+    const onStorage = (event) => {
+      if (event.key === UPLOADS_STORAGE_KEY) {
+        void loadStats();
+      }
+    };
+
+    window.addEventListener("storage", onStorage);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(refreshTimer);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
 
   /* Replace with real API data */
-  const stats     = STAT_CARDS.map(s => ({ ...s, value: "—" }));
-  const users     = [];
-  const activity  = [];
-  const chartData = new Array(14).fill(0);
+  const stats = STAT_CARDS.map((s) => ({
+    ...s,
+    value:
+      s.label === "Total Users"
+        ? (statsData.totalUsers ?? "…")
+        : s.label === "Total Analyses"
+        ? (statsData.totalAnalyses ?? "…")
+        : s.label === "Total Uploads"
+        ? (statsData.totalUploads ?? "…")
+        : "—",
+  }));
+  const users = dashboardUsers;
+  const analysisRows = buildWeeklyAnalysisRows(dashboardUploads);
+  const chartData = analysisRows.map((row) => row.count);
   const maxChart  = Math.max(...chartData, 1);
+
+  const chartWidth = 100;
+  const chartHeight = 100;
+  const stepX = analysisRows.length > 1 ? chartWidth / (analysisRows.length - 1) : chartWidth;
+  const linePoints = analysisRows
+    .map((row, i) => {
+      const x = i * stepX;
+      const y = chartHeight - (row.count / maxChart) * chartHeight;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+  const areaPoints = `0,${chartHeight} ${linePoints} ${chartWidth},${chartHeight}`;
 
   const pageTitle = NAV_ITEMS.find(n => n.id === active)?.label || "Dashboard";
   const today     = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
@@ -106,7 +253,11 @@ export default function Dashboardlayout() {
       <Sidebar active={active}  user={{ initials: "AD", name: "Admin User", role: "Super Admin" }} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AdminNavbar title={pageTitle} user={{ initials: "AD", name: "Admin User" }} />
+        <AdminNavbar
+          title={pageTitle}
+          user={{ initials: "AD", name: "Admin User" }}
+          onProfileClick={() => navigate("/profile")}
+        />
 
         <main className="flex-1 overflow-y-auto px-8 py-7 space-y-8">
 
@@ -126,13 +277,16 @@ export default function Dashboardlayout() {
             </div>
 
             {/* Quick action */}
-            <button className="flex items-center gap-2 bg-gradient-to-br from-emerald-500 to-green-600
+            <button
+              onClick={() => navigate("/users", { state: { openAddUser: true } })}
+              className="flex items-center gap-2 bg-gradient-to-br from-emerald-500 to-green-600
               text-white text-[13px] font-semibold px-5 py-2.5 rounded-xl shadow-md shadow-emerald-200
-              hover:shadow-lg hover:shadow-emerald-300 hover:-translate-y-0.5 transition-all duration-200">
+              hover:shadow-lg hover:shadow-emerald-300 hover:-translate-y-0.5 transition-all duration-200"
+            >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
               </svg>
-              New Analysis
+              Add User Details
             </button>
           </div>
 
@@ -182,10 +336,10 @@ export default function Dashboardlayout() {
             </div>
           </section>
 
-          {/* ── Users + Activity ─────────────────────────────────── */}
+          {/* ── Users ─────────────────────────────────── */}
           <section>
-            <SectionHead title="Details" sub="Users and live activity feed" />
-            <div className="grid grid-cols-[1fr_360px] gap-5 max-[1024px]:grid-cols-1">
+            <SectionHead title="Details" sub="Users overview" />
+            <div>
 
               {/* Users table */}
               <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
@@ -201,14 +355,14 @@ export default function Dashboardlayout() {
                   </div>
                   <span className="text-[11px] font-semibold tracking-wider uppercase
                     px-3 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100">
-                    0 total
+                    {users.length} shown
                   </span>
                 </div>
 
                 <table className="w-full border-collapse">
                   <thead>
                     <tr className="bg-gray-50/50">
-                      {TABLE_COLS.map(col => (
+                      {USER_TABLE_COLS.map(col => (
                         <th key={col}
                           className="text-left px-6 py-3 text-[10.5px] font-bold tracking-[0.12em]
                             uppercase text-gray-400 border-b border-gray-100 whitespace-nowrap">
@@ -220,7 +374,7 @@ export default function Dashboardlayout() {
                   <tbody>
                     {users.length === 0 ? (
                       <tr>
-                        <td colSpan={TABLE_COLS.length}>
+                        <td colSpan={USER_TABLE_COLS.length}>
                           <EmptyState
                             iconD="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
                             text="No users yet"
@@ -229,41 +383,25 @@ export default function Dashboardlayout() {
                         </td>
                       </tr>
                     ) : users.map((u, i) => (
-                      <tr key={i} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors">
-                        {/* Map your user fields here */}
+                      <tr key={u.id || i} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors">
+                        <td className="px-6 py-3.5">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-green-600 flex items-center justify-center text-white text-[11px] font-bold">
+                              {(u.initials || u.name || "US").slice(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="text-[13px] font-semibold text-gray-800 leading-tight">{u.name || "Unknown"}</p>
+                              <p className="text-[11px] text-gray-400">{u.email || "-"}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-3.5 text-[12px] font-semibold text-gray-700">{u.role || "User"}</td>
+                        <td className="px-6 py-3.5 text-[12px] font-semibold text-gray-700">{u.analyses ?? 0}</td>
+                        <td className="px-6 py-3.5"><UserStatusBadge active={Boolean(u.active)} /></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
-
-              {/* Activity feed */}
-              <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-50">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center">
-                      <Ico d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" cls="w-4 h-4 text-gray-400" sw="1.6" />
-                    </div>
-                    <h3 className="text-[15px] font-bold text-gray-800" style={{ fontFamily: "'Syne', sans-serif" }}>
-                      Activity
-                    </h3>
-                  </div>
-                  <span className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wider uppercase
-                    px-3 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    Live
-                  </span>
-                </div>
-
-                {activity.length === 0 ? (
-                  <EmptyState
-                    iconD="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                    text="No activity yet"
-                    sub="Events will stream here in real time"
-                  />
-                ) : activity.map((a, i) => (
-                  <div key={i}>{/* Map activity items here */}</div>
-                ))}
               </div>
 
             </div>
@@ -271,7 +409,7 @@ export default function Dashboardlayout() {
 
           {/* ── Bar chart ────────────────────────────────────────── */}
           <section>
-            <SectionHead title="Analyses Per Day" sub="Daily submission volume over the last 2 weeks" />
+            <SectionHead title="Analyses Per Week" sub="Weekly submission volume over the last 8 weeks" />
             <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
 
               {/* Chart header strip */}
@@ -286,34 +424,53 @@ export default function Dashboardlayout() {
                 </div>
                 <div className="ml-auto text-[11px] font-semibold tracking-wider uppercase
                   px-3 py-1 rounded-full bg-gray-50 text-gray-400 border border-gray-100">
-                  Last 14 days
+                  Last 8 weeks
                 </div>
               </div>
 
-              {/* Bars */}
+              {/* Line chart */}
               <div className="px-6 py-6">
-                <div className="flex items-end gap-2.5 h-32">
-                  {chartData.map((v, i) => (
-                    <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
-                      <div
-                        className="w-full rounded-t-lg bg-gray-100 min-h-[4px]
-                          group-hover:bg-emerald-200 transition-colors duration-200 cursor-pointer relative"
-                        style={{ height: v > 0 ? `${(v / maxChart) * 100}%` : "4px" }}
-                        title={`${v} analyses`}
-                      >
-                        {/* Tooltip */}
-                        {v > 0 && (
-                          <span className="absolute -top-7 left-1/2 -translate-x-1/2 text-[10px] font-semibold
-                            bg-gray-800 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100
-                            transition-opacity whitespace-nowrap">
-                            {v}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[9.5px] font-medium text-gray-300 tracking-wide">
-                        {CHART_DAYS[i]}
-                      </span>
-                    </div>
+                <div className="h-40 w-full">
+                  <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
+                    <defs>
+                      <linearGradient id="analysisAreaFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#10b981" stopOpacity="0.28" />
+                        <stop offset="100%" stopColor="#10b981" stopOpacity="0.03" />
+                      </linearGradient>
+                    </defs>
+
+                    <line x1="0" y1="25" x2="100" y2="25" stroke="#f3f4f6" strokeWidth="0.7" />
+                    <line x1="0" y1="50" x2="100" y2="50" stroke="#f3f4f6" strokeWidth="0.7" />
+                    <line x1="0" y1="75" x2="100" y2="75" stroke="#f3f4f6" strokeWidth="0.7" />
+
+                    <polygon points={areaPoints} fill="url(#analysisAreaFill)" />
+                    <polyline
+                      points={linePoints}
+                      fill="none"
+                      stroke="#10b981"
+                      strokeWidth="1.5"
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                    />
+
+                    {analysisRows.map((row, i) => {
+                      const x = i * stepX;
+                      const y = chartHeight - (row.count / maxChart) * chartHeight;
+
+                      return (
+                        <circle key={row.key} cx={x} cy={y} r="1.35" fill="#10b981">
+                          <title>{`${row.rangeLabel}: ${row.count} analyses`}</title>
+                        </circle>
+                      );
+                    })}
+                  </svg>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between gap-1 overflow-x-auto">
+                  {analysisRows.map((row) => (
+                    <span key={row.key} className="min-w-[56px] whitespace-nowrap text-center text-[9.5px] font-medium text-gray-300 tracking-wide">
+                      {row.weekLabel}
+                    </span>
                   ))}
                 </div>
               </div>
@@ -326,5 +483,37 @@ export default function Dashboardlayout() {
         </main>
       </div>
     </div>
+  );
+}
+
+function UserStatusBadge({ active }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase px-2.5 py-1 rounded-full border ${
+        active
+          ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+          : "bg-gray-50 text-gray-400 border-gray-200"
+      }`}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-gray-300"}`} />
+      {active ? "Active" : "Inactive"}
+    </span>
+  );
+}
+
+function AnalysisStatusBadge({ status }) {
+  const styles = {
+    completed: "bg-emerald-50 text-emerald-600 border-emerald-100",
+    processing: "bg-amber-50 text-amber-600 border-amber-100",
+    failed: "bg-red-50 text-red-500 border-red-100",
+  };
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase px-2.5 py-1 rounded-full border ${styles[status] || "bg-gray-50 text-gray-500 border-gray-200"}`}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${status === "completed" ? "bg-emerald-500" : status === "processing" ? "bg-amber-500 animate-pulse" : status === "failed" ? "bg-red-500" : "bg-gray-400"}`} />
+      {status || "unknown"}
+    </span>
   );
 }

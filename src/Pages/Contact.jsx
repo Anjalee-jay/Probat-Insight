@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { submitContactMessage } from "../services/contactApi";
+
 const faqs = [
   {
     q: "How does angle-based analysis work?",
@@ -21,16 +23,27 @@ const Contact = () => {
   const [formData, setFormData] = useState({ name: "", email: "", message: "" });
   const [openFaq, setOpenFaq] = useState(null);
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const handleChange = (e) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Form Submitted:", formData);
-    setSubmitted(true);
-    setFormData({ name: "", email: "", message: "" });
-    setTimeout(() => setSubmitted(false), 4000);
+    setSubmitError("");
+    setIsSubmitting(true);
+
+    try {
+      await submitContactMessage(formData);
+      setSubmitted(true);
+      setFormData({ name: "", email: "", message: "" });
+      setTimeout(() => setSubmitted(false), 4000);
+    } catch (error) {
+      setSubmitError(error.message || "Failed to send your message. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -355,6 +368,15 @@ const Contact = () => {
               />
             </div>
 
+            {submitError && (
+              <div className="toast" style={{ color: "#ff6b6b", borderColor: "rgba(255,107,107,0.5)", background: "rgba(255,107,107,0.12)" }}>
+                <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M21 12A9 9 0 113 12a9 9 0 0118 0z" />
+                </svg>
+                {submitError}
+              </div>
+            )}
+
             {submitted ? (
               <div className="toast">
                 <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -363,7 +385,9 @@ const Contact = () => {
                 Message sent! We'll get back to you shortly.
               </div>
             ) : (
-              <button type="submit" className="submit-btn">Send Message →</button>
+              <button type="submit" className="submit-btn" disabled={isSubmitting}>
+                {isSubmitting ? "Sending..." : "Send Message →"}
+              </button>
             )}
           </form>
 

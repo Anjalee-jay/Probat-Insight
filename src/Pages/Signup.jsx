@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "../Components/ThemeContext";
+import { registerRequest } from "../services/authApi";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -9,6 +10,21 @@ export default function Signup() {
   const [avatar, setAvatar] = useState(null);       // base64 preview
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef(null);
+
+  // Form state
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    password: "",
+    confirm: "",
+    dob: "",
+    gender: "",
+    phone: "",
+  });
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   // ── handle file selection (input or drag) ──
   const handleFile = (file) => {
@@ -31,6 +47,85 @@ export default function Signup() {
     e.stopPropagation();
     setAvatar(null);
     if (fileRef.current) fileRef.current.value = "";
+  };
+
+  // ── Form handlers ──
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    setError(""); // Clear error on input change
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+
+    // Validation
+    if (!formData.name.trim()) {
+      setError("Full name is required");
+      return;
+    }
+    if (!formData.email.trim()) {
+      setError("Email is required");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      setError("Please enter a valid email");
+      return;
+    }
+    if (!formData.password) {
+      setError("Password is required");
+      return;
+    }
+    if (formData.password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+    if (formData.password.length > 72) {
+      setError("Password must be 72 characters or less");
+      return;
+    }
+    if (formData.password !== formData.confirm) {
+      setError("Passwords do not match");
+      return;
+    }
+    if (!formData.dob) {
+      setError("Date of birth is required");
+      return;
+    }
+    if (!termsAccepted) {
+      setError("You must accept the Terms and Conditions");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload = {
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        password: formData.password,
+        dob: formData.dob,
+        gender: formData.gender || null,
+        phone: formData.phone || null,
+        avatar: avatar,
+        role: "user",
+      };
+
+      const response = await registerRequest(payload);
+      
+      // Store token if registration successful
+      if (response.access_token) {
+        localStorage.setItem("authToken", response.access_token);
+        localStorage.setItem("user", JSON.stringify(response.user));
+        setSuccess("Account created successfully! Redirecting...");
+        setTimeout(() => navigate("/"), 2000);
+      }
+    } catch (err) {
+      setError(err.message || "Failed to create account. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -376,7 +471,39 @@ export default function Signup() {
           <h2 className="su-heading">Create Account</h2>
           <p className="su-sub">Join thousands of players improving with AI</p>
 
-          <form onSubmit={(e) => e.preventDefault()}>
+          {/* Error Message */}
+          {error && (
+            <div style={{
+              background: "rgba(255, 61, 113, 0.1)",
+              border: "1px solid rgba(255, 61, 113, 0.3)",
+              borderRadius: "10px",
+              padding: "12px 14px",
+              marginBottom: "20px",
+              color: "#ff6b6b",
+              fontSize: "13px",
+              fontWeight: "500",
+            }}>
+              {error}
+            </div>
+          )}
+
+          {/* Success Message */}
+          {success && (
+            <div style={{
+              background: "rgba(66, 255, 78, 0.1)",
+              border: "1px solid rgba(66, 255, 78, 0.3)",
+              borderRadius: "10px",
+              padding: "12px 14px",
+              marginBottom: "20px",
+              color: "#42FF4E",
+              fontSize: "13px",
+              fontWeight: "500",
+            }}>
+              {success}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit}>
 
             {/* ── PROFILE PICTURE UPLOADER ── */}
             <div className="su-section-label">Profile Picture</div>
@@ -465,22 +592,43 @@ export default function Signup() {
             <div className="su-grid">
               <div className="su-field">
                 <label className={`su-label${focused === "name" ? " active" : ""}`}>Full Name</label>
-                <input type="text" placeholder="John Doe" className="su-input"
-                  onFocus={() => setFocused("name")} onBlur={() => setFocused("")} />
+                <input 
+                  type="text" 
+                  name="name"
+                  placeholder="John Doe" 
+                  className="su-input"
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  onFocus={() => setFocused("name")} 
+                  onBlur={() => setFocused("")} 
+                />
               </div>
               <div className="su-field">
                 <label className={`su-label${focused === "dob" ? " active" : ""}`}>Date of Birth</label>
-                <input type="date" className="su-input"
-                  onFocus={() => setFocused("dob")} onBlur={() => setFocused("")} />
+                <input 
+                  type="date" 
+                  name="dob"
+                  className="su-input"
+                  value={formData.dob}
+                  onChange={handleInputChange}
+                  onFocus={() => setFocused("dob")} 
+                  onBlur={() => setFocused("")} 
+                />
               </div>
               <div className="su-field">
                 <label className={`su-label${focused === "gender" ? " active" : ""}`}>
                   Gender <span className="su-optional">Optional</span>
                 </label>
                 <div className="su-select-wrap">
-                  <select className="su-select" defaultValue=""
-                    onFocus={() => setFocused("gender")} onBlur={() => setFocused("")}>
-                    <option value="" disabled>Select Gender</option>
+                  <select 
+                    name="gender"
+                    className="su-select" 
+                    value={formData.gender}
+                    onChange={handleInputChange}
+                    onFocus={() => setFocused("gender")} 
+                    onBlur={() => setFocused("")}
+                  >
+                    <option value="">Select Gender</option>
                     <option value="male">Male</option>
                     <option value="female">Female</option>
                     <option value="other">Other</option>
@@ -491,8 +639,16 @@ export default function Signup() {
                 <label className={`su-label${focused === "phone" ? " active" : ""}`}>
                   Phone <span className="su-optional">Optional</span>
                 </label>
-                <input type="tel" placeholder="+94 7XXXXXXXX" className="su-input"
-                  onFocus={() => setFocused("phone")} onBlur={() => setFocused("")} />
+                <input 
+                  type="tel" 
+                  name="phone"
+                  placeholder="+94 7XXXXXXXX" 
+                  className="su-input"
+                  value={formData.phone}
+                  onChange={handleInputChange}
+                  onFocus={() => setFocused("phone")} 
+                  onBlur={() => setFocused("")} 
+                />
               </div>
             </div>
 
@@ -501,24 +657,57 @@ export default function Signup() {
             <div className="su-grid">
               <div className="su-field su-full">
                 <label className={`su-label${focused === "email" ? " active" : ""}`}>Email Address</label>
-                <input type="email" placeholder="you@example.com" className="su-input"
-                  onFocus={() => setFocused("email")} onBlur={() => setFocused("")} />
+                <input 
+                  type="email" 
+                  name="email"
+                  placeholder="you@example.com" 
+                  className="su-input"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  onFocus={() => setFocused("email")} 
+                  onBlur={() => setFocused("")} 
+                />
               </div>
               <div className="su-field">
                 <label className={`su-label${focused === "password" ? " active" : ""}`}>Password</label>
-                <input type="password" placeholder="••••••••" className="su-input"
-                  onFocus={() => setFocused("password")} onBlur={() => setFocused("")} />
+                <input 
+                  type="password" 
+                  name="password"
+                  placeholder="••••••••" 
+                  className="su-input"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  onFocus={() => setFocused("password")} 
+                  onBlur={() => setFocused("")} 
+                />
               </div>
               <div className="su-field">
                 <label className={`su-label${focused === "confirm" ? " active" : ""}`}>Confirm Password</label>
-                <input type="password" placeholder="••••••••" className="su-input"
-                  onFocus={() => setFocused("confirm")} onBlur={() => setFocused("")} />
+                <input 
+                  type="password" 
+                  name="confirm"
+                  placeholder="••••••••" 
+                  className="su-input"
+                  value={formData.confirm}
+                  onChange={handleInputChange}
+                  onFocus={() => setFocused("confirm")} 
+                  onBlur={() => setFocused("")} 
+                />
               </div>
             </div>
 
             {/* Terms */}
             <div className="su-terms">
-              <input type="checkbox" id="terms" className="su-checkbox" />
+              <input 
+                type="checkbox" 
+                id="terms" 
+                className="su-checkbox"
+                checked={termsAccepted}
+                onChange={(e) => {
+                  setTermsAccepted(e.target.checked);
+                  if (e.target.checked) setError("");
+                }}
+              />
               <label htmlFor="terms" className="su-terms-label">
                 I agree to the <button type="button" className="su-terms-link">Terms and Conditions</button>
               </label>
@@ -526,11 +715,18 @@ export default function Signup() {
 
             {/* Bottom */}
             <div className="su-bottom">
-              <button type="submit" className="su-submit">
-                Create Account
-                <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
-                </svg>
+              <button 
+                type="submit" 
+                className="su-submit"
+                disabled={loading}
+                style={{ opacity: loading ? 0.6 : 1, cursor: loading ? "not-allowed" : "pointer" }}
+              >
+                {loading ? "Creating Account..." : "Create Account"}
+                {!loading && (
+                  <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
+                )}
               </button>
               <p className="su-login-row">
                 Already have an account?

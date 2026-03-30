@@ -40,6 +40,7 @@ export default function AdminNavbar({
   title = "Dashboard",
   user = { initials: "AD", name: "Admin User" },
   onSearch,
+  onProfileClick,
 }) {
   return (
     <header className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-gray-100">
@@ -70,15 +71,17 @@ export default function AdminNavbar({
             <BellIcon />
           </button>
 
-          <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 min-w-[148px]">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-400 to-green-600 text-white flex items-center justify-center text-[13px] font-bold shadow-sm">
-              {user.initials}
-            </div>
-            <div className="min-w-0">
-              <p className="text-[13px] font-semibold text-gray-800 truncate">{user.name}</p>
-              <p className="text-[11px] text-gray-400">Administrator</p>
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={onProfileClick}
+            aria-label={user?.name ? `${user.name} profile` : "Admin profile"}
+            title={user?.name || "Admin Profile"}
+            className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-400 to-green-600 text-white
+              border border-emerald-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all
+              flex items-center justify-center text-[13px] font-bold"
+          >
+            {user.initials}
+          </button>
         </div>
       </div>
     </header>

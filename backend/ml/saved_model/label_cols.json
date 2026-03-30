@@ -1,0 +1,24 @@
+{
+  "label_cols": [
+    "stance",
+    "grip_hands",
+    "back_lift",
+    "elbow_angle",
+    "head_position"
+  ],
+  "feature_names": [
+    "front_elbow_angle",
+    "back_elbow_angle",
+    "back_lift_angle",
+    "front_knee_angle",
+    "back_knee_angle",
+    "head_offset",
+    "head_drop",
+    "shoulder_tilt",
+    "hip_shoulder_separation",
+    "stance_width_ratio"
+  ],
+  "best_model": "RandomForest",
+  "overall_mae": 1.134028407582001,
+  "overall_r2": 0.7283617621941563
+}

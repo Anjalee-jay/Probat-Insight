@@ -1,8 +1,61 @@
-import React, { useState, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Sidebar from "../Components/Sidebar";
 import AdminNavbar from "../Components/AdminNavbar";
+import { uploadAnalysisImage } from "../services/uploadsApi";
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Syne:wght@700;800&family=Outfit:wght@400;500;600;700;800&display=swap');`;
+const UPLOADS_STORAGE_KEY = "probat-admin-uploads";
+
+function loadStoredUploads() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const raw = window.localStorage.getItem(UPLOADS_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function formatFileSize(sizeInBytes) {
+  if (!Number.isFinite(sizeInBytes) || sizeInBytes <= 0) {
+    return "-";
+  }
+  if (sizeInBytes < 1024 * 1024) {
+    return `${(sizeInBytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(sizeInBytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatUploadedAt(date = new Date()) {
+  return new Date(date).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function derivePlayerFromFilename(filename = "") {
+  const base = String(filename).replace(/\.[^/.]+$/, "");
+  const cleaned = base.replace(/[._-]+/g, " ").trim();
+  if (!cleaned) {
+    return "-";
+  }
+
+  return cleaned
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
 
 function Ico({ d, cls = "w-5 h-5", sw = "1.7" }) {
   return (
@@ -88,10 +141,15 @@ export default function Uploads() {
   const [filter, setFilter]   = useState("all");
   const [search, setSearch]   = useState("");
   const [dragging, setDragging] = useState(false);
+  const [uploads, setUploads] = useState(() => loadStoredUploads());
   const inputRef = useRef();
 
-  /* ── Replace with real API data ── */
-  const uploads = [];
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(UPLOADS_STORAGE_KEY, JSON.stringify(uploads));
+  }, [uploads]);
 
   const FILTERS = [
     { id: "all",        label: "All",        count: uploads.length },
@@ -100,17 +158,81 @@ export default function Uploads() {
     { id: "failed",     label: "Failed",     count: uploads.filter(u => u.status === "failed").length     },
   ];
 
-  const filtered = uploads.filter(u => {
+  const filtered = useMemo(() => uploads.filter(u => {
     const matchFilter = filter === "all" || u.status === filter;
     const matchSearch = !search || u.filename?.toLowerCase().includes(search.toLowerCase())
       || u.player?.toLowerCase().includes(search.toLowerCase());
     return matchFilter && matchSearch;
-  });
+  }), [uploads, filter, search]);
+
+  const addPendingUpload = (file) => {
+    const now = new Date();
+    const item = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      filename: file.name,
+      player: derivePlayerFromFilename(file.name),
+      size: formatFileSize(file.size),
+      uploadedAt: formatUploadedAt(now),
+      uploadedAtIso: now.toISOString(),
+      status: "processing",
+    };
+
+    setUploads((prev) => [item, ...prev]);
+    return item.id;
+  };
+
+  const updateUploadStatus = (id, status, extra = {}) => {
+    setUploads((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? { ...item, status, ...extra }
+          : item
+      )
+    );
+  };
+
+  const handleSingleUpload = async (file) => {
+    if (!file.type.startsWith("image/")) {
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      const tooLargeId = addPendingUpload(file);
+      updateUploadStatus(tooLargeId, "failed", {
+        error: "File exceeds 10MB limit",
+      });
+      return;
+    }
+
+    const pendingId = addPendingUpload(file);
+
+    try {
+      const responseData = await uploadAnalysisImage({ file });
+      updateUploadStatus(pendingId, "completed", {
+        analysis: responseData,
+        score: Number.isFinite(Number(responseData?.scores?.overall))
+          ? Math.round(Number(responseData.scores.overall))
+          : null,
+        grade: responseData?.grade || null,
+        modelUsed: responseData?.model_used || null,
+      });
+    } catch (err) {
+      updateUploadStatus(pendingId, "failed", {
+        error: err?.message || "Upload failed",
+      });
+    }
+  };
+
+  const handleFiles = (fileList) => {
+    const files = Array.from(fileList || []);
+    files.forEach((file) => {
+      void handleSingleUpload(file);
+    });
+  };
 
   const handleDrop = (e) => {
     e.preventDefault();
     setDragging(false);
-    // handle e.dataTransfer.files here
+    handleFiles(e.dataTransfer.files);
   };
 
   return (
@@ -137,7 +259,17 @@ export default function Uploads() {
               <Ico d="M12 4v16m8-8H4" cls="w-4 h-4" sw="2.2" />
               Upload Image
             </button>
-            <input ref={inputRef} type="file" accept="image/*" className="hidden" />
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => {
+                handleFiles(e.target.files);
+                e.target.value = "";
+              }}
+              className="hidden"
+            />
           </div>
 
           {/* Drop zone */}

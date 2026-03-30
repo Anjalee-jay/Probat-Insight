@@ -1,0 +1,6 @@
+{
+  "venvPath": "..",
+  "venv": ".venv313",
+  "include": ["app"],
+  "exclude": ["**/__pycache__"]
+}

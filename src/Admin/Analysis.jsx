@@ -1,8 +1,107 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Sidebar from "../Components/Sidebar";
 import AdminNavbar from "../Components/AdminNavbar";
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Syne:wght@700;800&family=Outfit:wght@400;500;600;700;800&display=swap');`;
+const UPLOADS_STORAGE_KEY = "probat-admin-uploads";
+
+function getStoredUploads() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const raw = window.localStorage.getItem(UPLOADS_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function getWeekStart(dateInput) {
+  const date = new Date(dateInput);
+  date.setHours(0, 0, 0, 0);
+  const mondayOffset = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() - mondayOffset);
+  return date;
+}
+
+function buildWeeklyAnalysisRows(uploads) {
+  const dayCounts = new Map();
+
+  uploads.forEach((upload) => {
+    const parsedDate = upload?.uploadedAt ? new Date(upload.uploadedAt) : null;
+    if (!parsedDate || Number.isNaN(parsedDate.getTime())) {
+      return;
+    }
+
+    const key = getWeekStart(parsedDate).toISOString().slice(0, 10);
+    dayCounts.set(key, (dayCounts.get(key) || 0) + 1);
+  });
+
+  const rows = [];
+  const currentWeekStart = getWeekStart(new Date());
+
+  for (let i = 7; i >= 0; i -= 1) {
+    const weekStart = new Date(currentWeekStart);
+    weekStart.setDate(currentWeekStart.getDate() - i * 7);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    const key = weekStart.toISOString().slice(0, 10);
+
+    rows.push({
+      key,
+      weekLabel: weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      rangeLabel: `${weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
+      count: dayCounts.get(key) || 0,
+    });
+  }
+
+  return rows;
+}
+
+function formatAnalysisDate(value) {
+  const parsed = value ? new Date(value) : null;
+  if (!parsed || Number.isNaN(parsed.getTime())) {
+    return "—";
+  }
+
+  return parsed.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function derivePlayerFromFilename(filename = "") {
+  const base = String(filename).replace(/\.[^/.]+$/, "");
+  const cleaned = base.replace(/[._-]+/g, " ").trim();
+  if (!cleaned) {
+    return "Unknown";
+  }
+
+  return cleaned
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function formatNumberValue(value, suffix = "") {
+  const num = Number(value);
+  if (!Number.isFinite(num)) {
+    return "—";
+  }
+
+  return `${Math.round(num)}${suffix}`;
+}
 
 /* ── Tiny icon helper ────────────────────────────────────────────────────── */
 function Ico({ d, cls = "w-5 h-5", sw = "1.7", fill = "none" }) {
@@ -204,9 +303,78 @@ export default function Analysis() {
   const [filter, setFilter]         = useState("all");
   const [search, setSearch]         = useState("");
   const [viewMode, setViewMode]     = useState("grid"); // "grid" | "list"
+  const [analysisUploads, setAnalysisUploads] = useState([]);
 
-  /* ── Replace with real API data ── */
-  const analyses = [];
+  const analyses = useMemo(() => (
+    analysisUploads
+      .map((item, index) => {
+        const analysisData = item.analysis || {};
+        const scores = analysisData.scores || {};
+        const features = analysisData.features || {};
+        const uploadedAtMs = new Date(item.uploadedAtIso || item.uploadedAt || 0).getTime();
+        const score = Number.isFinite(Number(scores.overall))
+          ? Math.round(Number(scores.overall))
+          : Number.isFinite(Number(item.score))
+          ? Math.round(Number(item.score))
+          : null;
+
+        return {
+          id: item.id || `${item.filename || "analysis"}-${index}`,
+          filename: item.filename || "Untitled upload",
+          player: item.player && item.player !== "-" ? item.player : derivePlayerFromFilename(item.filename),
+          date: formatAnalysisDate(item.uploadedAtIso || item.uploadedAt),
+          status: item.status || "pending",
+          score,
+          shotType: analysisData.grade || item.grade || "—",
+          stance: formatNumberValue(scores.stance, "/100"),
+          batAngle: formatNumberValue(features.back_lift_angle, "°"),
+          coach: analysisData.model_used || item.modelUsed || "System",
+          uploadedAtMs,
+        };
+      })
+      .sort((a, b) => {
+        const aDate = Number.isFinite(a.uploadedAtMs) ? a.uploadedAtMs : 0;
+        const bDate = Number.isFinite(b.uploadedAtMs) ? b.uploadedAtMs : 0;
+        return bDate - aDate;
+      })
+  ), [analysisUploads]);
+
+  useEffect(() => {
+    const loadUploads = () => {
+      setAnalysisUploads(getStoredUploads());
+    };
+
+    loadUploads();
+
+    const refreshTimer = window.setInterval(loadUploads, 30000);
+    const onStorage = (event) => {
+      if (event.key === UPLOADS_STORAGE_KEY) {
+        loadUploads();
+      }
+    };
+
+    window.addEventListener("storage", onStorage);
+
+    return () => {
+      window.clearInterval(refreshTimer);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
+  const analysisRows = buildWeeklyAnalysisRows(analysisUploads);
+  const chartData = analysisRows.map((row) => row.count);
+  const maxChart = Math.max(...chartData, 1);
+  const chartWidth = 100;
+  const chartHeight = 100;
+  const stepX = analysisRows.length > 1 ? chartWidth / (analysisRows.length - 1) : chartWidth;
+  const linePoints = analysisRows
+    .map((row, i) => {
+      const x = i * stepX;
+      const y = chartHeight - (row.count / maxChart) * chartHeight;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+  const areaPoints = `0,${chartHeight} ${linePoints} ${chartWidth},${chartHeight}`;
 
   const FILTERS = [
     { id: "all",        label: "All",        count: analyses.length },
@@ -217,7 +385,10 @@ export default function Analysis() {
 
   const filtered = analyses.filter(a => {
     const matchFilter = filter === "all" || a.status === filter;
-    const matchSearch = !search || a.player?.toLowerCase().includes(search.toLowerCase());
+    const searchLower = search.toLowerCase();
+    const matchSearch = !search
+      || a.player?.toLowerCase().includes(searchLower)
+      || a.filename?.toLowerCase().includes(searchLower);
     return matchFilter && matchSearch;
   });
 
@@ -256,6 +427,65 @@ export default function Analysis() {
 
           {/* ── Summary strip ── */}
           <SummaryStrip analyses={analyses} />
+
+          {/* ── Trend chart ── */}
+          <section className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+            <div className="flex items-center gap-6 px-6 py-4 border-b border-gray-50">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                <span className="text-[12px] font-medium text-gray-400">Analyses trend</span>
+              </div>
+              <div className="ml-auto text-[11px] font-semibold tracking-wider uppercase px-3 py-1 rounded-full bg-gray-50 text-gray-400 border border-gray-100">
+                Last 8 weeks
+              </div>
+            </div>
+
+            <div className="px-6 py-6">
+              <div className="h-40 w-full">
+                <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
+                  <defs>
+                    <linearGradient id="analysisPageAreaFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10b981" stopOpacity="0.28" />
+                      <stop offset="100%" stopColor="#10b981" stopOpacity="0.03" />
+                    </linearGradient>
+                  </defs>
+
+                  <line x1="0" y1="25" x2="100" y2="25" stroke="#f3f4f6" strokeWidth="0.7" />
+                  <line x1="0" y1="50" x2="100" y2="50" stroke="#f3f4f6" strokeWidth="0.7" />
+                  <line x1="0" y1="75" x2="100" y2="75" stroke="#f3f4f6" strokeWidth="0.7" />
+
+                  <polygon points={areaPoints} fill="url(#analysisPageAreaFill)" />
+                  <polyline
+                    points={linePoints}
+                    fill="none"
+                    stroke="#10b981"
+                    strokeWidth="1.5"
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                  />
+
+                  {analysisRows.map((row, i) => {
+                    const x = i * stepX;
+                    const y = chartHeight - (row.count / maxChart) * chartHeight;
+
+                    return (
+                      <circle key={row.key} cx={x} cy={y} r="1.35" fill="#10b981">
+                        <title>{`${row.rangeLabel}: ${row.count} analyses`}</title>
+                      </circle>
+                    );
+                  })}
+                </svg>
+              </div>
+
+              <div className="mt-3 flex items-center justify-between gap-1 overflow-x-auto">
+                {analysisRows.map((row) => (
+                  <span key={row.key} className="min-w-[56px] whitespace-nowrap text-center text-[9.5px] font-medium text-gray-300 tracking-wide">
+                    {row.weekLabel}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </section>
 
           {/* ── Toolbar ── */}
           <div className="flex items-center justify-between gap-4 flex-wrap">

@@ -1,0 +1,30 @@
+{
+  "name": "battinganalyse",
+  "version": "1.0.0",
+  "description": "A cricket analytics platform for refining batting techniques using AI.",
+  "main": "src/main.jsx",
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "dependencies": {
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2",
+    "react-scripts": "4.0.3",
+    "react-router-dom": "^5.2.0"
+  },
+  "devDependencies": {
+    "eslint": "^7.14.0",
+    "eslint-plugin-react": "^7.27.0"
+  },
+  "keywords": [
+    "cricket",
+    "analytics",
+    "AI",
+    "sports"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}

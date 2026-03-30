@@ -5,6 +5,7 @@ import HomePage from "./Pages/HomePage";
 import Picupload from "./Pages/Picupload";
 import Login from "./Pages/Login";
 import Signup from "./Pages/Signup";
+import ForgotPassword from "./Pages/ForgotPassword";
 import About from "./Pages/About";
 import Contact from "./Pages/Contact";
 import Profile from "./Pages/Profile";
@@ -30,7 +31,25 @@ import "./index.css";
 
 function ProtectedAdminRoute({ children }) {
   const { isLoggedIn, user } = useAuth();
-  if (!isLoggedIn || user?.role !== "admin") {
+
+  // Fallback: after login, navigate() fires before React commits state updates.
+  // localStorage is written synchronously first, so use it as the authority.
+  let effectiveUser = user;
+  let effectiveIsLoggedIn = isLoggedIn;
+  if (!isLoggedIn) {
+    const token = localStorage.getItem("auth_token");
+    try {
+      const stored = JSON.parse(localStorage.getItem("auth_user") || "null");
+      if (token && stored) {
+        effectiveIsLoggedIn = true;
+        effectiveUser = stored;
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }
+
+  if (!effectiveIsLoggedIn || effectiveUser?.role !== "admin") {
     return <Navigate to="/login" replace />;
   }
   return children;
@@ -61,6 +80,7 @@ function AppRoutes() {
         <Route path="/contact" element={<Contact />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/picupload" element={<Picupload />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/analyzing" element={<Analyzing />} />

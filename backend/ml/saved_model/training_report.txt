@@ -1,0 +1,46 @@
+============================================================
+  ProBat Insight — Batting Quality Model Training Report
+============================================================
+
+Dataset : 240 samples  (good=100, average=80, poor=60)
+Features: ['front_elbow_angle', 'back_elbow_angle', 'back_lift_angle', 'front_knee_angle', 'back_knee_angle', 'head_offset', 'head_drop', 'shoulder_tilt', 'hip_shoulder_separation', 'stance_width_ratio']
+Outputs : ['stance', 'grip_hands', 'back_lift', 'elbow_angle', 'head_position']
+CV folds: 2
+
+─── RandomForest (1.3s) ───
+  Overall MAE : 1.134
+  Overall R2  : 0.7284
+  Per-output MAE:
+    stance               1.328
+    grip_hands           1.137
+    back_lift            1.166
+    elbow_angle          1.091
+    head_position        0.947
+  Per-output R2:
+    stance               0.6512
+    grip_hands           0.7546
+    back_lift            0.6773
+    elbow_angle          0.7790
+    head_position        0.7798
+
+Best model selected : RandomForest
+  CV Overall MAE    : 1.134
+  CV Overall R2     : 0.7284
+
+In-sample MAE (full retrain): 0.529
+
+Feature importances (mean across outputs):
+  front_elbow_angle              0.3333
+  back_lift_angle                0.2071
+  front_knee_angle               0.1196
+  head_offset                    0.0912
+  head_drop                      0.0770
+  back_elbow_angle               0.0748
+  stance_width_ratio             0.0548
+  shoulder_tilt                  0.0205
+  back_knee_angle                0.0193
+  hip_shoulder_separation        0.0024
+
+Saved model -> backend\ml\saved_model\batting_model.joblib
+Saved meta  -> backend\ml\saved_model\label_cols.json
+============================================================
