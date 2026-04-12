@@ -42,8 +42,8 @@ python seed_admin.py
 ```
 
 Default admin credentials:
-- `admin@probat.com`
-- `admin123`
+- `admin@gmail.com`
+- `Admin123#@$`
 
 ## 4) Endpoints
 

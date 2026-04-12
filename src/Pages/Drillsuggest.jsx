@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import Layout from "../Components/Layout";
 
 const DRILL_LIBRARY = {
   stance: [
@@ -187,7 +188,7 @@ export default function DrillSuggest() {
   const drill = drills[activeDrill];
 
   return (
-    <>
+    <Layout>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Share+Tech+Mono&family=Barlow:wght@300;400;500;600;700&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -559,6 +560,6 @@ export default function DrillSuggest() {
         </div>
 
       </div>
-    </>
+    </Layout>
   );
 }

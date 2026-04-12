@@ -1,8 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Sidebar from "../Components/Sidebar";
 import AdminNavbar from "../Components/AdminNavbar";
+import { useAuth } from "../Components/AuthContext";
+import { updateProfileRequest } from "../services/authApi";
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Syne:wght@700;800&family=Outfit:wght@400;500;600;700;800&display=swap');`;
+const ADMIN_ORG_STORAGE_KEY = "probat_admin_org";
 
 function Ico({ d, cls = "w-5 h-5", sw = "1.7" }) {
   return (
@@ -93,13 +96,96 @@ function Tab({ label, icon, active, onClick }) {
 
 /* ── Main page ───────────────────────────────────────────────────────────── */
 export default function Settings() {
+  const { user, login } = useAuth();
   const [activeTab, setActiveTab] = useState("profile");
 
   // Profile
   const [name,     setName]     = useState("Admin User");
-  const [email,    setEmail]    = useState("admin@batlytics.com");
+  const [email,    setEmail]    = useState("admin@gmail.com");
   const [phone,    setPhone]    = useState("");
-  const [org,      setOrg]      = useState("Batlytics");
+  const [org,      setOrg]      = useState(() => {
+    if (typeof window === "undefined") {
+      return "Batlytics";
+    }
+    return window.localStorage.getItem(ADMIN_ORG_STORAGE_KEY) || "Batlytics";
+  });
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [saveStatus, setSaveStatus] = useState({ type: "", message: "" });
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+    setName(user.name || "Admin User");
+    setEmail(user.email || "admin@gmail.com");
+    setPhone(user.phone || "");
+  }, [user]);
+
+  const validateProfile = () => {
+    const normalizedName = name.trim();
+    const rawEmail = email.trim();
+    const normalizedEmail = rawEmail.toLowerCase();
+    const normalizedPhone = phone.trim();
+
+    if (!normalizedName || normalizedName.length < 2) {
+      return { error: "Full name must be at least 2 characters." };
+    }
+
+    if (!normalizedEmail) {
+      return { error: "Email is required." };
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return { error: "Please enter a valid email address." };
+    }
+
+    if (rawEmail !== normalizedEmail) {
+      return { error: "Email must be in lowercase letters only." };
+    }
+
+    if (normalizedPhone) {
+      const compactPhone = normalizedPhone.replace(/\s/g, "");
+      const digits = compactPhone.startsWith("+") ? compactPhone.slice(1) : compactPhone;
+      if (!/^\d{10,15}$/.test(digits)) {
+        return { error: "Phone number must contain 10 to 15 digits." };
+      }
+    }
+
+    return {
+      payload: {
+        name: normalizedName,
+        email: normalizedEmail,
+        phone: normalizedPhone || null,
+      },
+    };
+  };
+
+  const handleSaveProfile = async () => {
+    setSaveStatus({ type: "", message: "" });
+
+    const validated = validateProfile();
+    if (validated.error) {
+      setSaveStatus({ type: "error", message: validated.error });
+      return;
+    }
+
+    setIsSavingProfile(true);
+    try {
+      const updatedUser = await updateProfileRequest(validated.payload);
+      await login(updatedUser);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(ADMIN_ORG_STORAGE_KEY, org.trim());
+      }
+      setSaveStatus({ type: "success", message: "Profile settings saved successfully." });
+    } catch (error) {
+      setSaveStatus({
+        type: "error",
+        message: error.message || "Unable to save settings right now.",
+      });
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
 
   // Notifications
   const [emailNotif,   setEmailNotif]   = useState(true);
@@ -172,10 +258,10 @@ export default function Settings() {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 max-[600px]:grid-cols-1">
-                      <Field label="Full Name"     value={name}  onChange={setName}  placeholder="Your name" />
+                      <Field label="Full Name"     value={name}  onChange={(value) => { setName(value); setSaveStatus({ type: "", message: "" }); }}  placeholder="Your name" />
                       <Field label="Organisation"  value={org}   onChange={setOrg}   placeholder="Team or club name" />
-                      <Field label="Email Address" value={email} onChange={setEmail} type="email" placeholder="admin@example.com" />
-                      <Field label="Phone Number"  value={phone} onChange={setPhone} type="tel"   placeholder="+1 000 000 0000" />
+                      <Field label="Email Address" value={email} onChange={(value) => { setEmail(value); setSaveStatus({ type: "", message: "" }); }} type="email" placeholder="admin@example.com" />
+                      <Field label="Phone Number"  value={phone} onChange={(value) => { setPhone(value); setSaveStatus({ type: "", message: "" }); }} type="tel"   placeholder="+1 000 000 0000" />
                     </div>
                   </SettingsCard>
 
@@ -194,10 +280,20 @@ export default function Settings() {
                     </div>
                   </SettingsCard>
 
+                  {saveStatus.message && (
+                    <div className={`text-[12px] font-semibold ${saveStatus.type === "error" ? "text-red-500" : "text-emerald-600"}`}>
+                      {saveStatus.message}
+                    </div>
+                  )}
+
                   <div className="flex justify-end">
-                    <button className="flex items-center gap-2 bg-gradient-to-br from-emerald-500 to-green-600 text-white text-[13px] font-semibold px-6 py-2.5 rounded-xl shadow-md shadow-emerald-200 hover:shadow-lg hover:shadow-emerald-300 hover:-translate-y-0.5 transition-all duration-200">
+                    <button
+                      onClick={handleSaveProfile}
+                      disabled={isSavingProfile}
+                      className="flex items-center gap-2 bg-gradient-to-br from-emerald-500 to-green-600 text-white text-[13px] font-semibold px-6 py-2.5 rounded-xl shadow-md shadow-emerald-200 hover:shadow-lg hover:shadow-emerald-300 hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
+                    >
                       <Ico d="M5 13l4 4L19 7" cls="w-4 h-4" sw="2.2" />
-                      Save Changes
+                      {isSavingProfile ? "Saving..." : "Save Changes"}
                     </button>
                   </div>
                 </>

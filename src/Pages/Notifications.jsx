@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import Layout from "../Components/Layout";
 
 const FILTERS = ["All", "Unread", "Reports", "Updates", "Alerts"];
 
@@ -53,7 +54,7 @@ export default function Notifications() {
   }, {});
 
   return (
-    <>
+    <Layout>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700;800&display=swap');
 
@@ -348,6 +349,6 @@ export default function Notifications() {
 
         </div>
       </div>
-    </>
+    </Layout>
   );
 }

@@ -1,8 +1,8 @@
 from app.database import users_collection
 from app.security import hash_password
 
-ADMIN_EMAIL = "admin@probat.com"
-ADMIN_PASSWORD = "admin123"
+ADMIN_EMAIL = "admin@gmail.com"
+ADMIN_PASSWORD = "Admin123#@$"
 
 existing_admin = users_collection.find_one({"email": ADMIN_EMAIL})
 if existing_admin:
@@ -17,4 +17,4 @@ else:
             "initials": "AD",
         }
     )
-    print("Admin user created: admin@probat.com / admin123")
+    print("Admin user created: admin@gmail.com / Admin123#@$")

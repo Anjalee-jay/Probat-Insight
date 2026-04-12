@@ -16,12 +16,7 @@ export default function Navbar() {
   const profileRef = useRef(null);
   const notifRef = useRef(null);
 
-  // Mock notifications — replace with real data from your backend
-  const [notifications, setNotifications] = useState([
-    { id: 1, title: "New analysis ready", desc: "Your batting report for Match #14 is ready.", time: "2m ago", read: false },
-    { id: 2, title: "Welcome to ProBat!", desc: "Start exploring player insights and stats.", time: "1h ago", read: false },
-    { id: 3, title: "Report updated", desc: "Weekly performance summary has been refreshed.", time: "3h ago", read: true },
-  ]);
+  const [notifications, setNotifications] = useState([]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 

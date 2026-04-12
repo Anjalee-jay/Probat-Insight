@@ -2,9 +2,13 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar, { NAV_ITEMS } from "../Components/Sidebar";
 import AdminNavbar from "../Components/AdminNavbar";
+import { useAuth } from "../context/AdminAuthContext";
 import { fetchUsers } from "../services/usersApi";
 
 const UPLOADS_STORAGE_KEY = "probat-admin-uploads";
+const USERS_STORAGE_KEY = "probat-admin-users";
+const DASHBOARD_REFRESH_EVENT = "probat-dashboard-refresh";
+const AUTH_UPDATED_EVENT = "probat-auth-updated";
 
 function getStoredUploads() {
   if (typeof window === "undefined") {
@@ -13,6 +17,23 @@ function getStoredUploads() {
 
   try {
     const raw = window.localStorage.getItem(UPLOADS_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function getStoredUsers() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const raw = window.localStorage.getItem(USERS_STORAGE_KEY);
     if (!raw) {
       return [];
     }
@@ -151,6 +172,7 @@ function SectionHead({ title, sub, action }) {
 export default function Dashboardlayout() {
   const [active] = useState("dashboard");
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [dashboardUsers, setDashboardUsers] = useState([]);
   const [dashboardUploads, setDashboardUploads] = useState([]);
 
@@ -165,6 +187,7 @@ export default function Dashboardlayout() {
 
     const loadStats = async () => {
       const uploads = getStoredUploads();
+      const storedUsers = getStoredUsers();
       const uploadsCount = uploads.length;
       setDashboardUploads(uploads);
 
@@ -187,12 +210,14 @@ export default function Dashboardlayout() {
           return;
         }
 
+        const totalAnalyses = storedUsers.reduce((sum, currentUser) => sum + Math.max(0, Number(currentUser.analyses) || 0), 0);
+
         setStatsData({
-          totalUsers: "—",
-          totalAnalyses: "—",
+          totalUsers: storedUsers.length,
+          totalAnalyses,
           totalUploads: uploadsCount,
         });
-        setDashboardUsers([]);
+        setDashboardUsers(storedUsers.slice(0, 6));
       }
     };
 
@@ -200,19 +225,41 @@ export default function Dashboardlayout() {
     const refreshTimer = window.setInterval(loadStats, 30000);
 
     const onStorage = (event) => {
-      if (event.key === UPLOADS_STORAGE_KEY) {
+      if ([UPLOADS_STORAGE_KEY, USERS_STORAGE_KEY, "auth_user"].includes(event.key)) {
         void loadStats();
       }
     };
 
+    const onDashboardRefresh = () => {
+      void loadStats();
+    };
+
     window.addEventListener("storage", onStorage);
+    window.addEventListener(DASHBOARD_REFRESH_EVENT, onDashboardRefresh);
+    window.addEventListener(AUTH_UPDATED_EVENT, onDashboardRefresh);
 
     return () => {
       isMounted = false;
       window.clearInterval(refreshTimer);
       window.removeEventListener("storage", onStorage);
+      window.removeEventListener(DASHBOARD_REFRESH_EVENT, onDashboardRefresh);
+      window.removeEventListener(AUTH_UPDATED_EVENT, onDashboardRefresh);
     };
   }, []);
+
+  const displayUser = user
+    ? {
+        initials: user.initials || user.name?.slice(0, 2).toUpperCase() || "AD",
+        name: user.name || "Admin User",
+        role: user.role === "admin" ? "Super Admin" : user.role || "Admin",
+      }
+    : {
+        initials: "AD",
+        name: "Admin User",
+        role: "Super Admin",
+      };
+
+  const welcomeName = displayUser.name.split(" ")[0] || "Admin";
 
   /* Replace with real API data */
   const stats = STAT_CARDS.map((s) => ({
@@ -250,12 +297,12 @@ export default function Dashboardlayout() {
     <div className="flex min-h-screen bg-[#f5f6fa]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
       <style>{FONT_IMPORT}</style>
 
-      <Sidebar active={active}  user={{ initials: "AD", name: "Admin User", role: "Super Admin" }} />
+      <Sidebar active={active} user={displayUser} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AdminNavbar
           title={pageTitle}
-          user={{ initials: "AD", name: "Admin User" }}
+          user={displayUser}
           onProfileClick={() => navigate("/profile")}
         />
 
@@ -269,7 +316,7 @@ export default function Dashboardlayout() {
               </p>
               <h1 className="text-[28px] font-bold tracking-[-0.01em] text-gray-900 leading-tight"
                 style={{ fontFamily: "'Outfit', sans-serif" }}>
-                Welcome back, Admin 
+                Welcome back, {welcomeName}
               </h1>
               <p className="text-[13px] text-gray-400 mt-1">
                 Here's what's happening with your cricket platform today.

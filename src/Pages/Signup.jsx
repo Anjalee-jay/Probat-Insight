@@ -25,6 +25,10 @@ export default function Signup() {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const phoneRegex = /^\+?[0-9\s]{10,15}$/;
 
   // ── handle file selection (input or drag) ──
   const handleFile = (file) => {
@@ -49,11 +53,144 @@ export default function Signup() {
     if (fileRef.current) fileRef.current.value = "";
   };
 
+  const validateField = (name, value, nextFormData = formData, nextTermsAccepted = termsAccepted) => {
+    switch (name) {
+      case "name": {
+        const trimmedName = value.trim();
+        if (!trimmedName) {
+          return "Full name is required.";
+        }
+        if (trimmedName.length < 2) {
+          return "Full name must be at least 2 characters.";
+        }
+        return "";
+      }
+      case "email": {
+        const rawEmail = value.trim();
+        const normalizedEmail = rawEmail.toLowerCase();
+        if (!normalizedEmail) {
+          return "Email is required.";
+        }
+        if (!emailRegex.test(normalizedEmail)) {
+          return "Please enter a valid email address.";
+        }
+        if (rawEmail !== normalizedEmail) {
+          return "Email must be in lowercase letters only.";
+        }
+        return "";
+      }
+      case "password": {
+        if (!value) {
+          return "Password is required.";
+        }
+        if (value.length < 8 || value.length > 72) {
+          return "Password must be between 8 and 72 characters.";
+        }
+        if (value.trim() !== value) {
+          return "Password cannot start or end with spaces.";
+        }
+        if (!/[A-Za-z]/.test(value) || !/[0-9]/.test(value)) {
+          return "Password must include at least one letter and one number.";
+        }
+        return "";
+      }
+      case "confirm": {
+        if (!value) {
+          return "Please confirm your password.";
+        }
+        if (nextFormData.password !== value) {
+          return "Passwords do not match.";
+        }
+        return "";
+      }
+      case "dob": {
+        if (!value) {
+          return "Date of birth is required.";
+        }
+        const selectedDate = new Date(value);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (selectedDate > today) {
+          return "Date of birth cannot be in the future.";
+        }
+        return "";
+      }
+      case "phone": {
+        if (value && !phoneRegex.test(value.trim())) {
+          return "Phone must contain 10 to 15 digits.";
+        }
+        return "";
+      }
+      case "terms": {
+        if (!nextTermsAccepted) {
+          return "You must accept the Terms and Conditions.";
+        }
+        return "";
+      }
+      default:
+        return "";
+    }
+  };
+
   // ── Form handlers ──
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    setError(""); // Clear error on input change
+    const nextFormData = { ...formData, [name]: value };
+    const nextFieldErrors = {
+      ...fieldErrors,
+      [name]: validateField(name, value, nextFormData),
+    };
+
+    if (name === "password" || name === "confirm") {
+      nextFieldErrors.confirm = validateField("confirm", nextFormData.confirm, nextFormData);
+    }
+
+    setFormData(nextFormData);
+    setError("");
+    setFieldErrors(nextFieldErrors);
+  };
+
+  const handleFieldBlur = (e) => {
+    const { name, value } = e.target;
+    setFocused("");
+    setFieldErrors((prev) => ({
+      ...prev,
+      [name]: validateField(name, value, formData),
+    }));
+  };
+
+  const handleTermsChange = (e) => {
+    const checked = e.target.checked;
+    setTermsAccepted(checked);
+    setError("");
+    setFieldErrors((prev) => ({
+      ...prev,
+      terms: validateField("terms", "", formData, checked),
+    }));
+  };
+
+  const validateForm = () => {
+    const trimmedName = formData.name.trim();
+    const rawEmail = formData.email.trim();
+    const normalizedEmail = rawEmail.toLowerCase();
+
+    const errors = {
+      name: validateField("name", formData.name),
+      email: validateField("email", formData.email),
+      password: validateField("password", formData.password),
+      confirm: validateField("confirm", formData.confirm, formData),
+      dob: validateField("dob", formData.dob),
+      phone: validateField("phone", formData.phone),
+      terms: validateField("terms", "", formData, termsAccepted),
+    };
+
+    Object.keys(errors).forEach((key) => {
+      if (!errors[key]) {
+        delete errors[key];
+      }
+    });
+
+    return { errors, normalizedEmail, trimmedName };
   };
 
   const handleSubmit = async (e) => {
@@ -61,53 +198,22 @@ export default function Signup() {
     setError("");
     setSuccess("");
 
-    // Validation
-    if (!formData.name.trim()) {
-      setError("Full name is required");
-      return;
-    }
-    if (!formData.email.trim()) {
-      setError("Email is required");
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      setError("Please enter a valid email");
-      return;
-    }
-    if (!formData.password) {
-      setError("Password is required");
-      return;
-    }
-    if (formData.password.length < 6) {
-      setError("Password must be at least 6 characters");
-      return;
-    }
-    if (formData.password.length > 72) {
-      setError("Password must be 72 characters or less");
-      return;
-    }
-    if (formData.password !== formData.confirm) {
-      setError("Passwords do not match");
-      return;
-    }
-    if (!formData.dob) {
-      setError("Date of birth is required");
-      return;
-    }
-    if (!termsAccepted) {
-      setError("You must accept the Terms and Conditions");
+    const { errors, normalizedEmail, trimmedName } = validateForm();
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      setError("Please fix the highlighted fields.");
       return;
     }
 
     setLoading(true);
     try {
       const payload = {
-        name: formData.name.trim(),
-        email: formData.email.trim(),
+        name: trimmedName,
+        email: normalizedEmail,
         password: formData.password,
         dob: formData.dob,
         gender: formData.gender || null,
-        phone: formData.phone || null,
+        phone: formData.phone.trim() || null,
         avatar: avatar,
         role: "user",
       };
@@ -116,13 +222,25 @@ export default function Signup() {
       
       // Store token if registration successful
       if (response.access_token) {
-        localStorage.setItem("authToken", response.access_token);
-        localStorage.setItem("user", JSON.stringify(response.user));
+        localStorage.setItem("auth_token", response.access_token);
+        localStorage.setItem("auth_user", JSON.stringify(response.user));
         setSuccess("Account created successfully! Redirecting...");
         setTimeout(() => navigate("/"), 2000);
       }
     } catch (err) {
-      setError(err.message || "Failed to create account. Please try again.");
+      const nextFieldErrors = { ...(err.fieldErrors || {}) };
+      const fallbackMessage = err.message || "Failed to create account. Please try again.";
+
+      if (!Object.keys(nextFieldErrors).length && fallbackMessage.toLowerCase().includes("email already exists")) {
+        nextFieldErrors.email = fallbackMessage;
+      }
+
+      if (Object.keys(nextFieldErrors).length > 0) {
+        setFieldErrors((prev) => ({ ...prev, ...nextFieldErrors }));
+        setError("Please fix the highlighted fields.");
+      } else {
+        setError(fallbackMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -600,8 +718,9 @@ export default function Signup() {
                   value={formData.name}
                   onChange={handleInputChange}
                   onFocus={() => setFocused("name")} 
-                  onBlur={() => setFocused("")} 
+                  onBlur={handleFieldBlur} 
                 />
+                {fieldErrors.name && <small style={{ color: "#ff6b6b", fontSize: "12px" }}>{fieldErrors.name}</small>}
               </div>
               <div className="su-field">
                 <label className={`su-label${focused === "dob" ? " active" : ""}`}>Date of Birth</label>
@@ -612,8 +731,9 @@ export default function Signup() {
                   value={formData.dob}
                   onChange={handleInputChange}
                   onFocus={() => setFocused("dob")} 
-                  onBlur={() => setFocused("")} 
+                  onBlur={handleFieldBlur} 
                 />
+                {fieldErrors.dob && <small style={{ color: "#ff6b6b", fontSize: "12px" }}>{fieldErrors.dob}</small>}
               </div>
               <div className="su-field">
                 <label className={`su-label${focused === "gender" ? " active" : ""}`}>
@@ -626,7 +746,7 @@ export default function Signup() {
                     value={formData.gender}
                     onChange={handleInputChange}
                     onFocus={() => setFocused("gender")} 
-                    onBlur={() => setFocused("")}
+                    onBlur={handleFieldBlur}
                   >
                     <option value="">Select Gender</option>
                     <option value="male">Male</option>
@@ -647,8 +767,9 @@ export default function Signup() {
                   value={formData.phone}
                   onChange={handleInputChange}
                   onFocus={() => setFocused("phone")} 
-                  onBlur={() => setFocused("")} 
+                  onBlur={handleFieldBlur} 
                 />
+                {fieldErrors.phone && <small style={{ color: "#ff6b6b", fontSize: "12px" }}>{fieldErrors.phone}</small>}
               </div>
             </div>
 
@@ -665,8 +786,9 @@ export default function Signup() {
                   value={formData.email}
                   onChange={handleInputChange}
                   onFocus={() => setFocused("email")} 
-                  onBlur={() => setFocused("")} 
+                  onBlur={handleFieldBlur} 
                 />
+                {fieldErrors.email && <small style={{ color: "#ff6b6b", fontSize: "12px" }}>{fieldErrors.email}</small>}
               </div>
               <div className="su-field">
                 <label className={`su-label${focused === "password" ? " active" : ""}`}>Password</label>
@@ -678,8 +800,9 @@ export default function Signup() {
                   value={formData.password}
                   onChange={handleInputChange}
                   onFocus={() => setFocused("password")} 
-                  onBlur={() => setFocused("")} 
+                  onBlur={handleFieldBlur} 
                 />
+                {fieldErrors.password && <small style={{ color: "#ff6b6b", fontSize: "12px" }}>{fieldErrors.password}</small>}
               </div>
               <div className="su-field">
                 <label className={`su-label${focused === "confirm" ? " active" : ""}`}>Confirm Password</label>
@@ -691,8 +814,9 @@ export default function Signup() {
                   value={formData.confirm}
                   onChange={handleInputChange}
                   onFocus={() => setFocused("confirm")} 
-                  onBlur={() => setFocused("")} 
+                  onBlur={handleFieldBlur} 
                 />
+                {fieldErrors.confirm && <small style={{ color: "#ff6b6b", fontSize: "12px" }}>{fieldErrors.confirm}</small>}
               </div>
             </div>
 
@@ -703,15 +827,13 @@ export default function Signup() {
                 id="terms" 
                 className="su-checkbox"
                 checked={termsAccepted}
-                onChange={(e) => {
-                  setTermsAccepted(e.target.checked);
-                  if (e.target.checked) setError("");
-                }}
+                onChange={handleTermsChange}
               />
               <label htmlFor="terms" className="su-terms-label">
                 I agree to the <button type="button" className="su-terms-link">Terms and Conditions</button>
               </label>
             </div>
+            {fieldErrors.terms && <small style={{ color: "#ff6b6b", fontSize: "12px" }}>{fieldErrors.terms}</small>}
 
             {/* Bottom */}
             <div className="su-bottom">

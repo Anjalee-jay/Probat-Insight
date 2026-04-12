@@ -20,7 +20,15 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Dict, List, Optional
 
-from ml.predictor import get_predictor
+# Lazy import to avoid initialization at module level
+_predictor = None
+
+def get_predictor():
+    global _predictor
+    if _predictor is None:
+        from ml.predictor import get_predictor as _get_predictor
+        _predictor = _get_predictor()
+    return _predictor
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 
@@ -42,6 +50,8 @@ class AnalysisResult(BaseModel):
     features:   Optional[Dict[str, float]]
     tips:       Optional[Dict[str, List[str]]]
     grade:      Optional[str]
+    stroke:     Optional[str]
+    stroke_confidence: Optional[float]
     model_used: str
 
 
@@ -103,6 +113,8 @@ async def analyse_upload(
         features   = result.get("features"),
         tips       = result.get("tips"),
         grade      = result.get("grade"),
+        stroke     = result.get("stroke"),
+        stroke_confidence = result.get("stroke_confidence"),
         model_used = model_label,
     )
 
@@ -112,9 +124,12 @@ def model_status():
     """Return information about the currently loaded model."""
     predictor = get_predictor()
     return {
-        "model_ready":    predictor.model_ready,
-        "scoring_method": "ml_model" if predictor.model_ready else "rule_based",
-        "label_cols":     predictor._label_cols,
+        "model_ready":       predictor.model_ready,
+        "stroke_model_ready": predictor._stroke_pipeline is not None,
+        "scoring_method":    "ml_model" if predictor.model_ready else "rule_based",
+        "stroke_method":     "ml_model" if predictor._stroke_pipeline is not None else "rule_based",
+        "label_cols":        predictor._label_cols,
+        "stroke_labels":     predictor._stroke_labels,
         "tip": (
             None if predictor.model_ready
             else "Run  python -m ml.train_model  from the backend/ directory to train."

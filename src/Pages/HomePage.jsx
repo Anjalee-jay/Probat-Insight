@@ -1,10 +1,13 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import playerImg from "../images/P3.png";
+import Navbar from "../Components/Navbar";
+import Footer from "../Components/Footer";
 
 export default function HomePage() {
   return (
     <>
+      <Navbar />
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,800&display=swap');
 
@@ -510,6 +513,7 @@ export default function HomePage() {
         </section>
 
       </div>
+      <Footer />
     </>
   );
 }

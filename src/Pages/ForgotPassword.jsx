@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "../Components/ThemeContext";
 import { forgotPasswordRequest } from "../services/authApi";
+import Layout from "../Components/Layout";
 
 export default function ForgotPassword() {
   const navigate = useNavigate();
@@ -29,7 +30,7 @@ export default function ForgotPassword() {
   };
 
   return (
-    <>
+    <Layout>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@300;400;500;600;700&display=swap');
 
@@ -478,6 +479,6 @@ export default function ForgotPassword() {
           </div>
         </div>
       </div>
-    </>
+    </Layout>
   );
 }

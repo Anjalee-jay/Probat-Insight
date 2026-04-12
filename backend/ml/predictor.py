@@ -134,6 +134,8 @@ class BattingPredictor:
 
     def __init__(self, model_dir: str | Path = DEFAULT_MODEL_DIR):
         self._pipeline = None
+        self._stroke_pipeline = None
+        self._stroke_labels = ["drive", "legglance-flick", "pullshot", "sweep"]
         self._label_cols: List[str] = [
             "stance", "grip_hands", "back_lift", "elbow_angle", "head_position"
         ]
@@ -143,6 +145,7 @@ class BattingPredictor:
     def _load_model(self, model_dir: Path) -> None:
         model_path = model_dir / "batting_model.joblib"
         meta_path  = model_dir / "label_cols.json"
+        stroke_model_path = Path(__file__).parent.parent / "rf_stroke.pkl"  # Use RF instead of XGB
 
         if model_path.exists():
             try:
@@ -159,6 +162,19 @@ class BattingPredictor:
         else:
             print("[predictor] No trained model found. Using rule-based scoring. "
                   f"Run  python -m ml.train_model  to train.")
+
+        # Load stroke model
+        if stroke_model_path.exists():
+            try:
+                import joblib
+                self._stroke_pipeline = joblib.load(stroke_model_path)
+                print(f"[predictor] Stroke model loaded from {stroke_model_path}")
+            except Exception as exc:
+                print(f"[predictor] Warning: could not load stroke model ({exc}). "
+                      "Using rule-based stroke identification.")
+                self._stroke_pipeline = None
+        else:
+            print("[predictor] No stroke model found. Using rule-based stroke identification.")
 
     @property
     def model_ready(self) -> bool:
@@ -255,6 +271,8 @@ class BattingPredictor:
         elif overall >= 50: grade = "D"
         else:               grade = "F"
 
+        stroke_result = self._identify_stroke_from_keypoints(keypoints, handedness)
+
         return {
             "success":  True,
             "error":    None,
@@ -262,6 +280,8 @@ class BattingPredictor:
             "features": {k: round(v, 3) for k, v in features.items()},
             "tips":     tips,
             "grade":    grade,
+            "stroke":   stroke_result["stroke"],
+            "stroke_confidence": stroke_result["confidence"],
         }
 
     def analyse_keypoints(
@@ -286,12 +306,88 @@ class BattingPredictor:
         elif overall >= 60: grade = "C"
         elif overall >= 50: grade = "D"
         else:               grade = "F"
+        
+        stroke_result = self._identify_stroke_from_keypoints(keypoints, handedness)
+        
         return {
             "success":  True, "error": None,
             "scores":   scores,
             "features": {k: round(v, 3) for k, v in features.items()},
             "tips":     tips, "grade": grade,
+            "stroke":   stroke_result["stroke"],
+            "stroke_confidence": stroke_result["confidence"],
         }
+
+    def _identify_stroke_from_keypoints(self, keypoints: Dict, handedness: str = "right") -> Dict[str, any]:
+        """
+        Identify stroke using ML model with raw pose keypoints.
+        Returns {"stroke": str, "confidence": float}
+        """
+        if self._stroke_pipeline is not None:
+            try:
+                # Flatten keypoints to feature vector (x, y, z coordinates only, exclude visibility)
+                # Use the same landmark order as LANDMARK_NAMES
+                from .pose_estimator import LANDMARK_NAMES
+                features = []
+                for name in LANDMARK_NAMES:
+                    if name in keypoints:
+                        kp = keypoints[name]
+                        # Only use x, y, z coordinates (exclude visibility)
+                        features.extend(kp[:3])
+                    else:
+                        features.extend([0.0, 0.0, 0.0])  # padding for missing keypoints
+                
+                # The model expects 128 features, but we have 33*3=99, so pad with zeros
+                features = features[:99]  # Make sure we don't exceed 99
+                while len(features) < 128:
+                    features.append(0.0)
+                
+                features = features[:128]  # Ensure exactly 128
+                vec = np.array(features).reshape(1, -1)
+                
+                pred_idx = self._stroke_pipeline.predict(vec)[0]
+                predicted_stroke = self._stroke_labels[int(pred_idx)]
+                
+                # Get confidence (probability of the predicted class)
+                if hasattr(self._stroke_pipeline, 'predict_proba'):
+                    proba = self._stroke_pipeline.predict_proba(vec)[0]
+                    confidence = float(proba[int(pred_idx)])
+                else:
+                    confidence = 0.8  # fallback if no predict_proba
+                
+                print(f"[predictor] ML stroke prediction: {predicted_stroke} (index: {pred_idx}, confidence: {confidence:.3f})")
+                return {"stroke": predicted_stroke, "confidence": confidence}
+            except Exception as e:
+                print(f"[predictor] Stroke model prediction failed: {e}")
+                import traceback
+                traceback.print_exc()
+                # Fall back to rule-based
+        
+        # Rule-based fallback using processed features
+        print("[predictor] Using rule-based stroke identification")
+        features = extract_batting_features(keypoints, handedness=handedness)
+        if features is None:
+            return {"stroke": "unknown", "confidence": 0.0}
+            
+        front_elbow = features.get("front_elbow_angle", 180)
+        back_lift = features.get("back_lift_angle", 0)
+        front_knee = features.get("front_knee_angle", 180)
+        shoulder_tilt = features.get("shoulder_tilt", 0)
+
+        if back_lift > 150 and front_knee < 120 and front_elbow >= 130:
+            stroke = "pullshot"
+        elif front_elbow < 110 and back_lift < 130:
+            stroke = "sweep"
+        elif abs(shoulder_tilt) > 12 and front_elbow >= 120:
+            stroke = "legglance-flick"
+        elif back_lift > 140 and front_elbow >= 130:
+            stroke = "drive"
+        else:
+            stroke = "drive"  # default fallback
+            
+        confidence = 0.7  # rule-based confidence
+        print(f"[predictor] Rule-based stroke prediction: {stroke} (confidence: {confidence})")
+        return {"stroke": stroke, "confidence": confidence}
 
 
 # ── Module-level singleton (lazy-loaded) ──────────────────────────────────────

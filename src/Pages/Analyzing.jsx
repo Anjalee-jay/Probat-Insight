@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
+import Layout from "../Components/Layout";
 
 const STAGES = [
   { label: "Uploading Footage",  duration: 2000, icon: "⬆" },
@@ -10,19 +11,34 @@ const STAGES = [
   { label: "Generating Report",  duration: 2000, icon: "▣" },
 ];
 
-const METRICS = [
-  { label: "Elbow Angle",    value: 142, unit: "°",    color: "#42FF4E" },
-  { label: "Bat Speed",      value: 87,  unit: "km/h", color: "#00e5ff" },
-  { label: "Head Position",  value: 94,  unit: "%",    color: "#FFD94E" },
-  { label: "Footwork Score", value: 78,  unit: "%",    color: "#FF6B6B" },
-];
+const getMetrics = (result) => {
+  if (!result || !result.scores) {
+    return [
+      { label: "Elbow Angle",    value: 142, unit: "°",    color: "#42FF4E" },
+      { label: "Bat Speed",      value: 87,  unit: "km/h", color: "#00e5ff" },
+      { label: "Head Position",  value: 94,  unit: "%",    color: "#FFD94E" },
+      { label: "Footwork Score", value: 78,  unit: "%",    color: "#FF6B6B" },
+    ];
+  }
+  const scores = result.scores;
+  return [
+    { label: "Stance",       value: Math.round(scores.stance),       unit: "%", color: "#42FF4E" },
+    { label: "Grip & Hands", value: Math.round(scores.grip_hands),   unit: "%", color: "#00e5ff" },
+    { label: "Back Lift",    value: Math.round(scores.back_lift),    unit: "%", color: "#FFD94E" },
+    { label: "Elbow Angle",  value: Math.round(scores.elbow_angle),  unit: "%", color: "#FF6B6B" },
+  ];
+};
 
 export default function Analyzing() {
   const navigate = useNavigate();
+  const location = useLocation();
   const canvasRef = useRef(null);
   const animRef = useRef(null);
   const scanLineRef = useRef(0);
 
+  const { result } = location.state || {};
+  const { preview } = location.state || {};
+  const METRICS = getMetrics(result);
   const [stage, setStage] = useState(0);
   const [progress, setProgress] = useState(0);
   const [metrics, setMetrics] = useState(METRICS.map(() => 0));
@@ -33,7 +49,7 @@ export default function Analyzing() {
     let index = 0;
     const runStage = () => {
       if (index >= STAGES.length) {
-        setTimeout(() => navigate("/results"), 1500);
+        setTimeout(() => navigate("/results", { state: { result } }), 1500);
         return;
       }
       let step = 0;
@@ -51,7 +67,7 @@ export default function Analyzing() {
       }, STAGES[index].duration / 100);
     };
     runStage();
-  }, [navigate]);
+  }, [navigate, result]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Metrics Count-up ── */
   useEffect(() => {
@@ -66,7 +82,7 @@ export default function Analyzing() {
       }, 2000 + i * 600)
     );
     return () => timers.forEach(clearTimeout);
-  }, []);
+  }, [METRICS]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Scan Line ── */
   useEffect(() => {
@@ -255,7 +271,7 @@ export default function Analyzing() {
   const overallProgress = ((completedStages.length * 100) + progress) / STAGES.length;
 
   return (
-    <>
+    <Layout>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Share+Tech+Mono&family=Barlow:wght@300;400;500;600;700&display=swap');
 
@@ -284,7 +300,24 @@ export default function Analyzing() {
           overflow: hidden;
         }
 
+        .an-image-container {
+          position: relative;
+          width: 100%;
+          height: 100%;
+        }
+
+        .an-image {
+          position: absolute;
+          top: 0; left: 0;
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          opacity: 0.9;
+        }
+
         .an-canvas {
+          position: absolute;
+          top: 0; left: 0;
           width: 100%;
           height: 100%;
           display: block;
@@ -385,6 +418,13 @@ export default function Analyzing() {
           font-weight: 300;
           margin-top: 4px;
           letter-spacing: 0.06em;
+        }
+        .an-detected-stroke {
+          font-size: 12px;
+          color: #00e5ff;
+          font-weight: 500;
+          margin-top: 8px;
+          letter-spacing: 0.05em;
         }
 
         /* overall progress */
@@ -565,6 +605,18 @@ export default function Analyzing() {
           font-weight: 400;
         }
 
+        .an-stroke {
+          padding: 20px 28px;
+          border-top: 1px solid rgba(255,255,255,0.06);
+        }
+        .an-stroke-name {
+          font-size: 18px;
+          font-weight: 600;
+          color: #00e5ff;
+          text-align: center;
+          margin-top: 10px;
+        }
+
         .an-metric-bar-container {
           margin-top: 8px;
           height: 2px;
@@ -602,7 +654,10 @@ export default function Analyzing() {
 
         {/* ── LEFT ── */}
         <div className="an-left">
-          <canvas ref={canvasRef} className="an-canvas" />
+          <div className="an-image-container">
+            {preview && <img src={preview} alt="Analyzing batting image" className="an-image" />}
+            <canvas ref={canvasRef} className="an-canvas" />
+          </div>
 
           <div className="an-top-badge">
             <div className="an-pulse-dot" />
@@ -627,6 +682,9 @@ export default function Analyzing() {
           <div className="an-header">
             <div className="an-title">ANALYSING</div>
             <div className="an-subtitle">BATTING TECHNIQUE · AI PROCESSING</div>
+            {result && result.stroke && (
+              <div className="an-detected-stroke">DETECTED STROKE: {result.stroke.toUpperCase().replace('-', ' ')}</div>
+            )}
           </div>
 
           <div className="an-overall">
@@ -693,6 +751,13 @@ export default function Analyzing() {
             ))}
           </div>
 
+          {result && result.stroke && (
+            <div className="an-stroke">
+              <div className="an-section-title">Detected Stroke</div>
+              <div className="an-stroke-name">{result.stroke.replace('-', ' ').toUpperCase()}</div>
+            </div>
+          )}
+
           <div className="an-footer">
             <span className="an-status-text">
               SYS · PROCESSING<span className="an-blink">_</span>
@@ -704,6 +769,6 @@ export default function Analyzing() {
 
         </div>
       </div>
-    </>
+    </Layout>
   );
 }

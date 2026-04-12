@@ -5,6 +5,7 @@ import { uploadAnalysisImage } from "../services/uploadsApi";
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Syne:wght@700;800&family=Outfit:wght@400;500;600;700;800&display=swap');`;
 const UPLOADS_STORAGE_KEY = "probat-admin-uploads";
+const DASHBOARD_REFRESH_EVENT = "probat-dashboard-refresh";
 
 function loadStoredUploads() {
   if (typeof window === "undefined") {
@@ -149,6 +150,7 @@ export default function Uploads() {
       return;
     }
     window.localStorage.setItem(UPLOADS_STORAGE_KEY, JSON.stringify(uploads));
+    window.dispatchEvent(new CustomEvent(DASHBOARD_REFRESH_EVENT, { detail: { source: "uploads" } }));
   }, [uploads]);
 
   const FILTERS = [

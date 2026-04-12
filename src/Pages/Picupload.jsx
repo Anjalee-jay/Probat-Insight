@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Layout from "../Components/Layout";
+import { uploadAnalysisImage } from "../services/uploadsApi";
 
 export default function Picupload() {
   const navigate = useNavigate();
@@ -131,9 +133,15 @@ export default function Picupload() {
     setUploading(true);
     setMessage("Analysing technique…");
     setMsgType("info");
-    await new Promise((r) => setTimeout(r, 1400));
-    setUploading(false);
-    navigate("/analyzing", { state: { file, preview } });
+    try {
+      const result = await uploadAnalysisImage({ file, handedness: "right" });
+      setUploading(false);
+      navigate("/analyzing", { state: { file, preview, result } });
+    } catch (error) {
+      setUploading(false);
+      setMessage(error.message);
+      setMsgType("error");
+    }
   }
 
   function clear() {
@@ -152,7 +160,7 @@ export default function Picupload() {
       : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
   return (
-    <>
+    <Layout>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@300;400;500;600;700&display=swap');
 
@@ -813,6 +821,6 @@ export default function Picupload() {
 
         </div>
       </div>
-    </>
+    </Layout>
   );
 }

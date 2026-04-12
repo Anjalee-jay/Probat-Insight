@@ -9,9 +9,10 @@ email-validator==2.2.0
 # ML / Computer Vision
 mediapipe==0.10.33
 opencv-python-headless==4.10.0.84
-numpy==1.26.4
+numpy>=2.1.0
 scikit-learn==1.5.2
 pandas==2.2.3
 joblib==1.4.2
 Pillow==10.4.0
 python-multipart==0.0.9
+xgboost==2.1.1

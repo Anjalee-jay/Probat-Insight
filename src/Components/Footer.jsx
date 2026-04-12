@@ -1,13 +1,34 @@
 import React, { useState } from "react";
+import { submitFeedback } from "../services/feedbackApi";
 
 export default function Footer() {
   const [rating, setRating] = useState(0);
   const [hovered, setHovered] = useState(0);
+  const [name, setName] = useState("");
+  const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSubmit = () => {
-    setSubmitted(true);
-    setTimeout(() => setSubmitted(false), 3500);
+  const handleSubmit = async () => {
+    setError("");
+    if (!name.trim()) { setError("Please enter your name."); return; }
+    if (rating === 0) { setError("Please select a star rating."); return; }
+    if (!message.trim()) { setError("Please write your feedback."); return; }
+
+    setLoading(true);
+    try {
+      await submitFeedback({ name: name.trim(), rating, message: message.trim() });
+      setSubmitted(true);
+      setName("");
+      setRating(0);
+      setMessage("");
+      setTimeout(() => setSubmitted(false), 3500);
+    } catch (err) {
+      setError(err.message || "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -294,6 +315,8 @@ export default function Footer() {
                   type="text"
                   placeholder="Your Name"
                   className="feedback-input"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                 />
 
                 <div className="stars-row">
@@ -323,7 +346,13 @@ export default function Footer() {
                   rows="3"
                   placeholder="Write your feedback..."
                   className="feedback-input"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
                 />
+
+                {error && (
+                  <div style={{ color: "#ff5555", fontSize: 13, padding: "4px 2px" }}>{error}</div>
+                )}
 
                 {submitted ? (
                   <div className="toast">
@@ -333,8 +362,9 @@ export default function Footer() {
                     Thank you for your feedback!
                   </div>
                 ) : (
-                  <button className="submit-btn" onClick={handleSubmit}>
-                    Submit Feedback
+                  <button className="submit-btn" onClick={handleSubmit} disabled={loading}
+                    style={loading ? { opacity: 0.6, cursor: "not-allowed" } : {}}>
+                    {loading ? "Submitting..." : "Submit Feedback"}
                   </button>
                 )}
               </div>

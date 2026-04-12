@@ -51,6 +51,57 @@ N_SPLITS     = 2       # k-fold cross-validation
 RANDOM_STATE = 42
 
 
+# ── Dataset loading helpers ──────────────────────────────────────────────────
+
+def _require_columns(df: pd.DataFrame, required_cols: list[str], source: str) -> None:
+    missing = [c for c in required_cols if c not in df.columns]
+    if missing:
+        raise ValueError(
+            f"Missing required columns in {source}: {missing}. "
+            f"Expected features={FEATURE_NAMES} and labels={LABEL_COLS}."
+        )
+
+
+def _load_dataset_from_csv(dataset_csv: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Load a single CSV that contains both feature and label columns.
+    """
+    df = pd.read_csv(dataset_csv)
+    _require_columns(df, FEATURE_NAMES + LABEL_COLS, str(dataset_csv))
+
+    # Keep only canonical columns and coerce to numeric for model training.
+    df = df[FEATURE_NAMES + LABEL_COLS].copy()
+    for col in FEATURE_NAMES + LABEL_COLS:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    df = df.dropna(axis=0).reset_index(drop=True)
+
+    X = df[FEATURE_NAMES].copy()
+    y = df[LABEL_COLS].copy()
+    return X, y
+
+
+def _load_dataset_from_split_csv(features_csv: Path, labels_csv: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Load feature and label CSV files separately.
+    """
+    X = pd.read_csv(features_csv)
+    y = pd.read_csv(labels_csv)
+
+    _require_columns(X, FEATURE_NAMES, str(features_csv))
+    _require_columns(y, LABEL_COLS, str(labels_csv))
+
+    X = X[FEATURE_NAMES].copy()
+    y = y[LABEL_COLS].copy()
+
+    for col in FEATURE_NAMES:
+        X[col] = pd.to_numeric(X[col], errors="coerce")
+    for col in LABEL_COLS:
+        y[col] = pd.to_numeric(y[col], errors="coerce")
+
+    joined = pd.concat([X, y], axis=1).dropna(axis=0).reset_index(drop=True)
+    return joined[FEATURE_NAMES].copy(), joined[LABEL_COLS].copy()
+
+
 # ── Model definitions to compare ─────────────────────────────────────────────
 
 def _build_pipelines() -> dict:
@@ -146,6 +197,9 @@ def train(
     n_good: int = 100,
     n_average: int = 80,
     n_poor: int = 60,
+    dataset_csv: Path | None = None,
+    features_csv: Path | None = None,
+    labels_csv: Path | None = None,
     verbose: bool = True,
 ) -> Pipeline:
     """
@@ -162,10 +216,28 @@ def train(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # ── 1. Data ───────────────────────────────────────────────────────────────
-    if verbose:
-        print("[train] Generating synthetic dataset...")
     t0 = time.perf_counter()
-    X, y = generate_dataset(n_good=n_good, n_average=n_average, n_poor=n_poor)
+    if dataset_csv is not None:
+        if verbose:
+            print(f"[train] Loading dataset from {dataset_csv}...")
+        X, y = _load_dataset_from_csv(Path(dataset_csv))
+        dataset_source = f"csv:{dataset_csv}"
+    elif features_csv is not None and labels_csv is not None:
+        if verbose:
+            print(f"[train] Loading features from {features_csv} and labels from {labels_csv}...")
+        X, y = _load_dataset_from_split_csv(Path(features_csv), Path(labels_csv))
+        dataset_source = f"features:{features_csv} labels:{labels_csv}"
+    else:
+        if verbose:
+            print("[train] Generating synthetic dataset...")
+        X, y = generate_dataset(n_good=n_good, n_average=n_average, n_poor=n_poor)
+        dataset_source = f"synthetic(good={n_good}, average={n_average}, poor={n_poor})"
+
+    if len(X) < N_SPLITS:
+        raise ValueError(
+            f"Need at least {N_SPLITS} rows after cleaning, but got {len(X)}."
+        )
+
     total_samples = len(X)
     if verbose:
         print(f"[train] {total_samples} samples generated  "
@@ -176,8 +248,8 @@ def train(
         "  ProBat Insight — Batting Quality Model Training Report",
         "=" * 60,
         "",
-        f"Dataset : {total_samples} samples  "
-        f"(good={n_good}, average={n_average}, poor={n_poor})",
+        f"Dataset source: {dataset_source}",
+        f"Dataset rows  : {total_samples}",
         f"Features: {FEATURE_NAMES}",
         f"Outputs : {LABEL_COLS}",
         f"CV folds: {N_SPLITS}",
@@ -292,14 +364,44 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--n-good",    type=int, default=100)
     parser.add_argument("--n-average", type=int, default=80)
     parser.add_argument("--n-poor",    type=int, default=60)
+    parser.add_argument(
+        "--dataset-csv",
+        type=str,
+        default=None,
+        help=(
+            "Path to one CSV containing all feature + label columns. "
+            f"Required feature columns: {FEATURE_NAMES}. "
+            f"Required label columns: {LABEL_COLS}."
+        ),
+    )
+    parser.add_argument(
+        "--features-csv",
+        type=str,
+        default=None,
+        help="Path to features CSV when using split files.",
+    )
+    parser.add_argument(
+        "--labels-csv",
+        type=str,
+        default=None,
+        help="Path to labels CSV when using split files.",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = _parse_args()
+    if args.dataset_csv and (args.features_csv or args.labels_csv):
+        raise SystemExit("Use either --dataset-csv OR (--features-csv and --labels-csv), not both.")
+    if (args.features_csv and not args.labels_csv) or (args.labels_csv and not args.features_csv):
+        raise SystemExit("When using split CSV files, provide both --features-csv and --labels-csv.")
+
     train(
         output_dir=Path(args.output),
         n_good=args.n_good,
         n_average=args.n_average,
         n_poor=args.n_poor,
+        dataset_csv=Path(args.dataset_csv) if args.dataset_csv else None,
+        features_csv=Path(args.features_csv) if args.features_csv else None,
+        labels_csv=Path(args.labels_csv) if args.labels_csv else None,
     )

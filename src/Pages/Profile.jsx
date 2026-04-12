@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useAuth } from "../Components/AuthContext";
+import Layout from "../Components/Layout";
 
 export default function Profile() {
   const { user } = useAuth();
@@ -25,7 +26,7 @@ export default function Profile() {
   };
 
   return (
-    <>
+    <Layout>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@300;400;500;600;700&display=swap');
 
@@ -592,6 +593,6 @@ export default function Profile() {
           </div>
         </div>
       )}
-    </>
+    </Layout>
   );
 }

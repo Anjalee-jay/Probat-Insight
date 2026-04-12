@@ -14,13 +14,51 @@ export default function Login() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
+  const validateLoginForm = () => {
+    const rawEmail = email.trim();
+    const normalizedEmail = rawEmail.toLowerCase();
+
+    if (!normalizedEmail) {
+      return "Email is required.";
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return "Please enter a valid email address.";
+    }
+
+    if (rawEmail !== normalizedEmail) {
+      return "Email must be in lowercase letters only.";
+    }
+
+    if (!password) {
+      return "Password is required.";
+    }
+
+    if (password.length < 8 || password.length > 72) {
+      return "Password must be between 8 and 72 characters.";
+    }
+
+    if (password.trim() !== password) {
+      return "Password cannot start or end with spaces.";
+    }
+
+    return "";
+  };
+
   const handleSignIn = async (e) => {
     e.preventDefault();
     setErrorMessage("");
+
+    const validationMessage = validateLoginForm();
+    if (validationMessage) {
+      setErrorMessage(validationMessage);
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      const loggedInUser = await login({ email, password });
+      const loggedInUser = await login({ email: email.trim().toLowerCase(), password });
       if (loggedInUser?.role === "admin") {
         navigate("/dashboard");
       } else {
@@ -304,7 +342,10 @@ export default function Login() {
                     placeholder="you@example.com"
                     className={`field-input${!isDarkMode ? " light" : ""}`}
                     value={email}
-                    onChange={e => setEmail(e.target.value)}
+                    onChange={e => {
+                      setEmail(e.target.value);
+                      setErrorMessage("");
+                    }}
                     required
                     onFocus={() => setFocused("email")}
                     onBlur={() => setFocused("")}
@@ -322,7 +363,10 @@ export default function Login() {
                     placeholder="••••••••"
                     className={`field-input${!isDarkMode ? " light" : ""}`}
                     value={password}
-                    onChange={e => setPassword(e.target.value)}
+                    onChange={e => {
+                      setPassword(e.target.value);
+                      setErrorMessage("");
+                    }}
                     required
                     onFocus={() => setFocused("pass")}
                     onBlur={() => setFocused("")}

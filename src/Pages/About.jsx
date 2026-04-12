@@ -1,13 +1,15 @@
 import React from "react";
+import Layout from "../Components/Layout";
 
 export default function About() {
   const ptSans = { fontFamily: "'PT Sans', sans-serif" };
 
   return (
-    <div className="bg-black text-white min-h-screen flex flex-col" style={ptSans}>
-      <main className="flex-grow">
-        {/* HERO SECTION */}
-        <section className="px-6 md:px-16 py-20 text-center">
+    <Layout>
+      <div className="bg-black text-white min-h-screen flex flex-col" style={ptSans}>
+        <main className="flex-grow">
+          {/* HERO SECTION */}
+          <section className="px-6 md:px-16 py-20 text-center">
           <h1 className="text-4xl md:text-5xl font-bold mb-6">
             About <span className="text-[#42FF4E]">ProBat Insight</span>
           </h1>
@@ -82,5 +84,6 @@ export default function About() {
         </section>
       </main>
     </div>
+    </Layout>
   );
 }

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Layout from "../Components/Layout";
 
 import { submitContactMessage } from "../services/contactApi";
 
@@ -47,7 +48,7 @@ const Contact = () => {
   };
 
   return (
-    <>
+    <Layout>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap');
 
@@ -442,7 +443,7 @@ const Contact = () => {
 
         </div>
       </div>
-    </>
+    </Layout>
   );
 };
 
