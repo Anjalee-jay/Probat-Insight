@@ -39,3 +39,29 @@ export async function uploadAnalysisImage({ file, handedness = "right" }) {
 
   return parseApiResponse(response, "Upload failed");
 }
+
+export async function getImages() {
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/images`, {
+      method: "GET",
+    });
+  } catch {
+    throw new Error("Unable to reach analysis service. Check that backend is running.");
+  }
+
+  return parseApiResponse(response, "Failed to fetch images");
+}
+
+export async function deleteImage(imageId) {
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/images/${imageId}`, {
+      method: "DELETE",
+    });
+  } catch {
+    throw new Error("Unable to reach analysis service. Check that backend is running.");
+  }
+
+  return parseApiResponse(response, "Failed to delete image");
+}

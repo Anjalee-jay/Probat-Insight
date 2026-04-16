@@ -14,8 +14,12 @@ import Profile from "./Pages/Profile";
 import Results from "./Pages/Results";
 
 // Admin components
-import AdminLogin from "./Pages/Admin/AdminLogin";
 import AdminDashboard from "./Admin/Dashboardlayout";
+import Analysis from "./Admin/Analysis";
+import Reports from "./Admin/Reports";
+import Settings from "./Admin/Settings";
+import Uploads from "./Admin/Uploads";
+import Users from "./Admin/Users";
 import ProtectedRoute from "./Pages/Admin/ProtectedRoute";
 import { AdminAuthProvider } from "./context/AdminAuthContext";
 
@@ -42,8 +46,12 @@ function App() {
               <Route path="/picupload" element={<Picupload />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/results" element={<Results />} />
-              <Route path="/admin/login" element={<AdminLogin />} />
               <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+              <Route path="/admin/analysis" element={<ProtectedRoute><Analysis /></ProtectedRoute>} />
+              <Route path="/admin/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+              <Route path="/admin/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              <Route path="/admin/uploads" element={<ProtectedRoute><Uploads /></ProtectedRoute>} />
+              <Route path="/admin/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
             </Routes>
           </BrowserRouter>
         </ThemeProvider>

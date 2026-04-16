@@ -13,6 +13,8 @@ db = client[MONGODB_DB]
 users_collection = db["users"]
 contact_messages_collection = db["contact_messages"]
 feedbacks_collection = db["feedbacks"]
+images_collection = db["images"]
+analysis_collection = db["analysis"]
 
 
 def check_db_connection() -> tuple[bool, str | None]:

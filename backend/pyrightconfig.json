@@ -1,6 +1,17 @@
 {
-  "venvPath": "..",
-  "venv": ".venv313",
+  "venvPath": ".",
+  "venv": ".venv",
   "include": ["app"],
-  "exclude": ["**/__pycache__"]
+  "exclude": [
+    "**/__pycache__",
+    "**/node_modules",
+    "**/.git",
+    "**/.venv",
+    "**/venv",
+    "**/.env",
+    "**/dist",
+    "**/build",
+    "**/.pytest_cache",
+    "**/.mypy_cache"
+  ]
 }

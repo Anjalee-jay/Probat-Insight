@@ -24,6 +24,27 @@ try:
 except Exception as exc:
     analysis_import_error = str(exc)
 
+analysis_crud_router = None
+analysis_crud_import_error = None
+try:
+    from app.routers.analysis_crud import router as analysis_crud_router
+except Exception as exc:
+    analysis_crud_import_error = str(exc)
+
+images_router = None
+images_import_error = None
+try:
+    from app.routers.images import router as images_router
+except Exception as exc:
+    images_import_error = str(exc)
+
+predict_router = None
+predict_import_error = None
+try:
+    from app.routers.predict import router as predict_router
+except Exception as exc:
+    predict_import_error = str(exc)
+
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 app = FastAPI(title="ProBat Insight API", version="1.0.0")
@@ -44,6 +65,12 @@ app.include_router(feedback_router, prefix="/api")
 app.include_router(users_router,    prefix="/api")
 if analysis_router is not None:
     app.include_router(analysis_router, prefix="/api")
+if analysis_crud_router is not None:
+    app.include_router(analysis_crud_router, prefix="/api")
+if images_router is not None:
+    app.include_router(images_router, prefix="/api")
+if predict_router is not None:
+    app.include_router(predict_router, prefix="/api")
 
 
 @app.get("/")
@@ -74,4 +101,11 @@ def health_check():
         response["analysis_error"] = analysis_import_error
     else:
         response["analysis_enabled"] = True
+
+    if analysis_crud_import_error:
+        response["analysis_crud_enabled"] = False
+        response["analysis_crud_error"] = analysis_crud_import_error
+    else:
+        response["analysis_crud_enabled"] = True
+
     return response

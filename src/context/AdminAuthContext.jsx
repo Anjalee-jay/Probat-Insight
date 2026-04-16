@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect } from "react";
+import React, { createContext, useState, useEffect, useContext } from "react";
 import { checkAuthStatus, login, logout } from "../services/adminAuthService";
 import { getAuthToken } from "../utils/authStorage";
 
@@ -47,3 +47,7 @@ export const AdminAuthProvider = ({ children }) => {
     </AdminAuthContext.Provider>
   );
 };
+
+export function useAuth() {
+  return useContext(AdminAuthContext);
+}

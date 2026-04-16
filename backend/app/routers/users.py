@@ -14,6 +14,7 @@ from app.schemas.users import (
     UsersResetResponse,
     UserUpdateRequest,
 )
+from app.security import require_admin
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -75,7 +76,7 @@ def _get_user_or_404(user_id: str) -> dict:
 
 
 @router.get("", response_model=UsersListResponse)
-def list_users():
+def list_users(current_user: dict = require_admin):
     try:
         user_docs = list(users_collection.find({}).sort("created_at", -1))
     except PyMongoError:
@@ -88,7 +89,7 @@ def list_users():
 
 
 @router.post("", response_model=UserMutationResponse, status_code=status.HTTP_201_CREATED)
-def create_user(payload: UserCreateRequest):
+def create_user(payload: UserCreateRequest, current_user: dict = require_admin):
     normalized_email = payload.email.lower()
 
     try:
@@ -129,7 +130,7 @@ def create_user(payload: UserCreateRequest):
 
 
 @router.put("/{user_id}", response_model=UserMutationResponse)
-def update_user(user_id: str, payload: UserUpdateRequest):
+def update_user(user_id: str, payload: UserUpdateRequest, current_user: dict = require_admin):
     try:
         current_user = _get_user_or_404(user_id)
         normalized_email = payload.email.lower()
@@ -169,7 +170,7 @@ def update_user(user_id: str, payload: UserUpdateRequest):
 
 
 @router.delete("/reset", response_model=UsersResetResponse)
-def reset_users():
+def reset_users(current_user: dict = require_admin):
     try:
         result = users_collection.delete_many({"managed_via_admin": True})
     except PyMongoError:
@@ -182,7 +183,7 @@ def reset_users():
 
 
 @router.delete("/{user_id}", response_model=UserDeleteResponse)
-def delete_user(user_id: str):
+def delete_user(user_id: str, current_user: dict = require_admin):
     try:
         current_user = _get_user_or_404(user_id)
         users_collection.delete_one({"_id": current_user["_id"]})

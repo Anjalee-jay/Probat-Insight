@@ -35,7 +35,15 @@ Or directly from `backend/`:
 uvicorn app.main:app --reload --port 8000
 ```
 
-## 3) Seed admin user
+## 3) Initialize Database
+
+```bash
+python init_database.py
+```
+
+This creates all required collections (users, contact_messages, feedbacks, images) and sets up proper indexes for optimal performance.
+
+## 4) Seed admin user
 
 ```bash
 python seed_admin.py
@@ -45,7 +53,7 @@ Default admin credentials:
 - `admin@gmail.com`
 - `Admin123#@$`
 
-## 4) Endpoints
+## 5) Endpoints
 
 - `GET /api/health`
 - `POST /api/auth/register`

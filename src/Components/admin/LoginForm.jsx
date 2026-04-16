@@ -1,8 +1,10 @@
 import React, { useState, useContext } from "react";
+import { useNavigate } from "react-router-dom";
 import { AdminAuthContext } from "../../context/AdminAuthContext";
 
 export default function LoginForm() {
   const { login } = useContext(AdminAuthContext);
+  const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -12,7 +14,8 @@ export default function LoginForm() {
     setError("");
 
     try {
-      await login(username, password);
+      await login({ username, password });
+      navigate("/admin/dashboard");
     } catch (err) {
       setError("Invalid username or password");
     }

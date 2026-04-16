@@ -1,27 +1,20 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Sidebar from "../Components/Sidebar";
 import AdminNavbar from "../Components/AdminNavbar";
+import { getAnalyses, getAnalysisStats } from "../services/analysisApi";
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Syne:wght@700;800&family=Outfit:wght@400;500;600;700;800&display=swap');`;
-const UPLOADS_STORAGE_KEY = "probat-admin-uploads";
 
-function getStoredUploads() {
-  if (typeof window === "undefined") {
-    return [];
+// API base URL resolution
+function resolveApiBaseUrl() {
+  const configuredBaseUrl = process.env.REACT_APP_API_BASE_URL?.trim();
+  if (configuredBaseUrl) {
+    return configuredBaseUrl.replace(/\/$/, "");
   }
-
-  try {
-    const raw = window.localStorage.getItem(UPLOADS_STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
-
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  return "http://127.0.0.1:8000";
 }
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 function getWeekStart(dateInput) {
   const date = new Date(dateInput);
@@ -35,7 +28,10 @@ function buildWeeklyAnalysisRows(uploads) {
   const dayCounts = new Map();
 
   uploads.forEach((upload) => {
-    const parsedDate = upload?.uploadedAt ? new Date(upload.uploadedAt) : null;
+    if (upload?.status !== "completed") {
+      return;
+    }
+    const parsedDate = upload?.uploadedAtIso ? new Date(upload.uploadedAtIso) : new Date(upload.uploadedAt);
     if (!parsedDate || Number.isNaN(parsedDate.getTime())) {
       return;
     }
@@ -78,6 +74,14 @@ function formatAnalysisDate(value) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function formatStrokeName(stroke = "") {
+  if (!stroke || stroke === "—") return "—";
+  return stroke
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
 }
 
 function derivePlayerFromFilename(filename = "") {
@@ -189,7 +193,26 @@ function FilterTab({ label, active, count, onClick }) {
 }
 
 /* ── Analysis card ───────────────────────────────────────────────────────── */
-function AnalysisCard({ item, onView }) {
+function AnalysisCard({ item }) {
+  // Format date for display
+  const formatDate = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return "—";
+      }
+      return date.toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    } catch {
+      return "—";
+    }
+  };
+
   return (
     <div className="bg-white border border-gray-100 rounded-2xl p-5 hover:shadow-lg hover:shadow-gray-100
       hover:-translate-y-0.5 transition-all duration-200 cursor-default group">
@@ -197,15 +220,27 @@ function AnalysisCard({ item, onView }) {
       {/* Top row */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
-          {/* Thumbnail placeholder */}
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gray-100 to-gray-50
-            border border-gray-100 flex items-center justify-center flex-shrink-0">
-            <Ico d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-              cls="w-5 h-5 text-gray-300" sw="1.5" />
+          <div className="w-14 h-14 rounded-2xl bg-gray-100 border border-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
+            {item.imageUrl ? (
+              <img
+                src={item.imageUrl}
+                alt={item.filename || "Analysis image"}
+                className="w-full h-full object-cover"
+                onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23d1d5db' d='M21 19V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2zm-2 0H5V5h14v14zM8 8.5a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm-1 8h10l-3.5-4.5-2.5 3-1.5-1.75L7 16.5z'/%3E%3C/svg%3E";
+              }}
+              />
+            ) : (
+              <Ico
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                cls="w-6 h-6 text-gray-300" sw="1.5"
+              />
+            )}
           </div>
           <div>
-            <p className="text-[14px] font-bold text-gray-800 leading-tight">{item.player}</p>
-            <p className="text-[12px] text-gray-400 mt-0.5">{item.date}</p>
+            <p className="text-[14px] font-bold text-gray-800 leading-tight">
+              {item.filename || item.player || "Unknown Image"}
+            </p>
+            <p className="text-[12px] text-gray-400 mt-0.5">{formatDate(item.uploadedAt)}</p>
           </div>
         </div>
         <StatusBadge status={item.status} />
@@ -216,9 +251,9 @@ function AnalysisCard({ item, onView }) {
         <ScoreRing score={item.score} size={68} />
         <div className="flex-1 space-y-2">
           {[
-            { label: "Shot Type",  value: item.shotType  },
-            { label: "Stance",     value: item.stance    },
-            { label: "Bat Angle",  value: item.batAngle  },
+            { label: "Detected Stroke", value: item.detectedStroke },
+            { label: "Stance",          value: item.stance         },
+            { label: "Bat Angle",       value: item.batAngle       },
           ].map(({ label, value }) => (
             <div key={label} className="flex items-center justify-between">
               <span className="text-[11.5px] text-gray-400 font-medium">{label}</span>
@@ -232,16 +267,8 @@ function AnalysisCard({ item, onView }) {
       <div className="flex items-center justify-between pt-4 border-t border-gray-50">
         <div className="flex items-center gap-1.5 text-[12px] text-gray-400">
           <Ico d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" cls="w-3.5 h-3.5" sw="2" />
-          {item.coach ?? "Unassigned"}
+          {item.modelUsed ?? "System"}
         </div>
-        <button
-          onClick={() => onView && onView(item)}
-          className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600
-            hover:text-emerald-700 transition-colors group-hover:underline"
-        >
-          View report
-          <Ico d="M9 5l7 7-7 7" cls="w-3.5 h-3.5" sw="2.2" />
-        </button>
       </div>
     </div>
   );
@@ -271,20 +298,57 @@ function EmptyState() {
 
 /* ── Summary stat strip ──────────────────────────────────────────────────── */
 function SummaryStrip({ analyses }) {
-  const total      = analyses.length;
-  const completed  = analyses.filter(a => a.status === "completed").length;
-  const processing = analyses.filter(a => a.status === "processing").length;
-  const avgScore   = completed
-    ? Math.round(analyses.filter(a => a.score != null).reduce((s, a) => s + a.score, 0) / completed)
-    : null;
+  const [stats, setStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        setStatsLoading(true);
+        const response = await getAnalysisStats();
+        setStats(response);
+      } catch (err) {
+        console.error("Failed to load analysis stats:", err);
+        // Fallback to calculating from analyses data
+        const total = analyses.length;
+        const completed = analyses.filter(a => a.status === "completed").length;
+        const processing = analyses.filter(a => a.status === "processing").length;
+        setStats({
+          total,
+          completed,
+          processing,
+          average_score: null
+        });
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+
+    loadStats();
+  }, [analyses]);
+
+  if (statsLoading || !stats) {
+    return (
+      <div className="grid grid-cols-3 gap-4 max-[800px]:grid-cols-2">
+        {[1, 2, 3].map(i => (
+          <div key={i} className="bg-gray-50 border border-gray-100 rounded-xl px-5 py-4 flex items-center gap-4 animate-pulse">
+            <div className="w-8 h-8 bg-gray-200 rounded"></div>
+            <div className="flex-1">
+              <div className="h-6 bg-gray-200 rounded mb-1"></div>
+              <div className="h-3 bg-gray-200 rounded w-16"></div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
-    <div className="grid grid-cols-4 gap-4 max-[800px]:grid-cols-2">
+    <div className="grid grid-cols-3 gap-4 max-[800px]:grid-cols-2">
       {[
-        { label: "Total",       value: total,      color: "text-gray-800",    bg: "bg-gray-50 border-gray-100"       },
-        { label: "Completed",   value: completed,  color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-100" },
-        { label: "Processing",  value: processing, color: "text-amber-700",   bg: "bg-amber-50 border-amber-100"     },
-        { label: "Avg Score",   value: avgScore ?? "—", color: "text-blue-700", bg: "bg-blue-50 border-blue-100"    },
+        { label: "Total",       value: stats.total,      color: "text-gray-800",    bg: "bg-gray-50 border-gray-100"       },
+        { label: "Completed",   value: stats.completed,  color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-100" },
+        { label: "Processing",  value: stats.processing, color: "text-amber-700",   bg: "bg-amber-50 border-amber-100"     },
       ].map(s => (
         <div key={s.label} className={`${s.bg} border rounded-xl px-5 py-4 flex items-center gap-4`}>
           <p className={`text-[28px] font-extrabold leading-none ${s.color}`} style={{ fontFamily: "'Syne'" }}>
@@ -299,11 +363,56 @@ function SummaryStrip({ analyses }) {
 
 /* ── Main page ───────────────────────────────────────────────────────────── */
 export default function Analysis() {
-  const [navActive] = useState("analyses");
+  const [navActive] = useState("analysis");
   const [filter, setFilter]         = useState("all");
   const [search, setSearch]         = useState("");
   const [viewMode, setViewMode]     = useState("grid"); // "grid" | "list"
   const [analysisUploads, setAnalysisUploads] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch analyses from API
+  useEffect(() => {
+    const loadAnalysisData = async () => {
+      try {
+        setLoading(true);
+        const response = await getAnalyses({ pageSize: 100 }); // Get more analyses for admin view
+        if (response?.analyses) {
+          setAnalysisUploads(response.analyses.map(analysis => ({
+            id: analysis.id,
+            filename: analysis.filename,
+            player: analysis.player,
+            uploadedAt: analysis.created_at,
+            uploadedAtIso: analysis.created_at,
+            status: analysis.status,
+            score: analysis.scores?.overall,
+            grade: analysis.grade,
+            analysis: {
+              scores: analysis.scores,
+              features: analysis.features,
+              tips: analysis.tips,
+              stroke: analysis.stroke,
+              stroke_confidence: analysis.stroke_confidence
+            },
+            modelUsed: analysis.model_used,
+            imageId: analysis.image_id,
+            detectedStroke: analysis.stroke,
+            stance: analysis.scores?.stance ? `${Math.round(analysis.scores.stance)}%` : "—",
+            batAngle: analysis.scores?.elbow_angle ? `${Math.round(analysis.scores.elbow_angle)}°` : "—",
+          })));
+        }
+      } catch (err) {
+        console.error("Failed to load analysis data:", err);
+        setAnalysisUploads([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadAnalysisData();
+    // Refresh every 10 seconds for real-time updates
+    const interval = setInterval(loadAnalysisData, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   const analyses = useMemo(() => (
     analysisUploads
@@ -325,11 +434,14 @@ export default function Analysis() {
           date: formatAnalysisDate(item.uploadedAtIso || item.uploadedAt),
           status: item.status || "pending",
           score,
-          shotType: analysisData.grade || item.grade || "—",
+          detectedStroke: formatStrokeName(analysisData.stroke) || "—",
           stance: formatNumberValue(scores.stance, "/100"),
           batAngle: formatNumberValue(features.back_lift_angle, "°"),
-          coach: analysisData.model_used || item.modelUsed || "System",
+          modelUsed: analysisData.model_used || item.modelUsed || "System",
           uploadedAtMs,
+          imageUrl: item.imageId ? `${API_BASE_URL}/api/images/${item.imageId}/data` : null,
+          imageId: item.imageId,
+          analysisData: analysisData,
         };
       })
       .sort((a, b) => {
@@ -338,28 +450,6 @@ export default function Analysis() {
         return bDate - aDate;
       })
   ), [analysisUploads]);
-
-  useEffect(() => {
-    const loadUploads = () => {
-      setAnalysisUploads(getStoredUploads());
-    };
-
-    loadUploads();
-
-    const refreshTimer = window.setInterval(loadUploads, 30000);
-    const onStorage = (event) => {
-      if (event.key === UPLOADS_STORAGE_KEY) {
-        loadUploads();
-      }
-    };
-
-    window.addEventListener("storage", onStorage);
-
-    return () => {
-      window.clearInterval(refreshTimer);
-      window.removeEventListener("storage", onStorage);
-    };
-  }, []);
 
   const analysisRows = buildWeeklyAnalysisRows(analysisUploads);
   const chartData = analysisRows.map((row) => row.count);

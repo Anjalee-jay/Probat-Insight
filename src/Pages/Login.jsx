@@ -60,7 +60,7 @@ export default function Login() {
     try {
       const loggedInUser = await login({ email: email.trim().toLowerCase(), password });
       if (loggedInUser?.role === "admin") {
-        navigate("/dashboard");
+        navigate("/admin/dashboard");
       } else {
         navigate("/");
       }

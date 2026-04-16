@@ -4,6 +4,8 @@ import Sidebar, { NAV_ITEMS } from "../Components/Sidebar";
 import AdminNavbar from "../Components/AdminNavbar";
 import { useAuth } from "../context/AdminAuthContext";
 import { fetchUsers } from "../services/usersApi";
+import { getImages } from "../services/uploadsApi";
+import { getAnalysisStats } from "../services/analysisApi";
 
 const UPLOADS_STORAGE_KEY = "probat-admin-uploads";
 const USERS_STORAGE_KEY = "probat-admin-users";
@@ -56,7 +58,14 @@ function buildWeeklyAnalysisRows(uploads) {
   const dayCounts = new Map();
 
   uploads.forEach((upload) => {
-    const parsedDate = upload?.uploadedAt ? new Date(upload.uploadedAt) : null;
+    let parsedDate;
+    if (upload?.uploadedAt) {
+      parsedDate = new Date(upload.uploadedAt);
+    } else if (upload?.uploaded_at) {
+      parsedDate = new Date(upload.uploaded_at);
+    } else {
+      return;
+    }
     if (!parsedDate || Number.isNaN(parsedDate.getTime())) {
       return;
     }
@@ -172,7 +181,6 @@ function SectionHead({ title, sub, action }) {
 export default function Dashboardlayout() {
   const [active] = useState("dashboard");
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [dashboardUsers, setDashboardUsers] = useState([]);
   const [dashboardUploads, setDashboardUploads] = useState([]);
 
@@ -186,46 +194,65 @@ export default function Dashboardlayout() {
     let isMounted = true;
 
     const loadStats = async () => {
-      const uploads = getStoredUploads();
       const storedUsers = getStoredUsers();
-      const uploadsCount = uploads.length;
-      setDashboardUploads(uploads);
+      let totalUploads = 0;
+      let dashboardUploadsData = [];
+      let totalUsers = storedUsers.length;
+      let totalAnalyses = 0; // Will be fetched from analysis collection
 
+      // Fetch uploads from MongoDB probat_insight.images collection
+      try {
+        const imagesResponse = await getImages();
+        const images = imagesResponse.images || [];
+        totalUploads = images.length;
+        dashboardUploadsData = images;
+        setDashboardUploads(images);
+      } catch (error) {
+        console.error("Failed to fetch uploads from MongoDB:", error);
+        // Fallback to stored uploads for display only
+        const storedUploads = getStoredUploads();
+        totalUploads = storedUploads.length;
+        dashboardUploadsData = storedUploads;
+        setDashboardUploads(storedUploads);
+      }
+
+      // Fetch real-time analysis stats from analysis collection
+      try {
+        const analysisStats = await getAnalysisStats();
+        totalAnalyses = analysisStats.total || 0;
+      } catch (error) {
+        console.error("Failed to fetch analysis stats:", error);
+        // Fallback to calculating from stored users (old behavior)
+        totalAnalyses = storedUsers.reduce((sum, currentUser) => sum + Math.max(0, Number(currentUser.analyses) || 0), 0);
+      }
+
+      // Fetch users
       try {
         const users = await fetchUsers();
-        const totalAnalyses = users.reduce((sum, user) => sum + Math.max(0, Number(user.analyses) || 0), 0);
-
-        if (!isMounted) {
-          return;
-        }
-
-        setStatsData({
-          totalUsers: users.length,
-          totalAnalyses,
-          totalUploads: uploadsCount,
-        });
+        totalUsers = users.length;
         setDashboardUsers(users.slice(0, 6));
-      } catch {
-        if (!isMounted) {
-          return;
-        }
-
-        const totalAnalyses = storedUsers.reduce((sum, currentUser) => sum + Math.max(0, Number(currentUser.analyses) || 0), 0);
-
-        setStatsData({
-          totalUsers: storedUsers.length,
-          totalAnalyses,
-          totalUploads: uploadsCount,
-        });
+      } catch (error) {
+        console.error("Failed to fetch users:", error);
+        // Keep stored users data
         setDashboardUsers(storedUsers.slice(0, 6));
       }
+
+      if (!isMounted) {
+        return;
+      }
+
+      setStatsData({
+        totalUsers,
+        totalAnalyses, // Now comes from analysis collection
+        totalUploads, // This comes from MongoDB images collection
+      });
     };
 
     loadStats();
-    const refreshTimer = window.setInterval(loadStats, 30000);
+    const refreshTimer = window.setInterval(loadStats, 10000); // Refresh every 10 seconds for real-time updates
 
     const onStorage = (event) => {
-      if ([UPLOADS_STORAGE_KEY, USERS_STORAGE_KEY, "auth_user"].includes(event.key)) {
+      if ([UPLOADS_STORAGE_KEY, USERS_STORAGE_KEY, "auth_user", "probat-admin-uploads-refresh"].includes(event.key)) {
         void loadStats();
       }
     };
@@ -247,17 +274,11 @@ export default function Dashboardlayout() {
     };
   }, []);
 
-  const displayUser = user
-    ? {
-        initials: user.initials || user.name?.slice(0, 2).toUpperCase() || "AD",
-        name: user.name || "Admin User",
-        role: user.role === "admin" ? "Super Admin" : user.role || "Admin",
-      }
-    : {
-        initials: "AD",
-        name: "Admin User",
-        role: "Super Admin",
-      };
+  const displayUser = {
+    initials: "AD",
+    name: "Admin User",
+    role: "Super Admin",
+  };
 
   const welcomeName = displayUser.name.split(" ")[0] || "Admin";
 
@@ -325,15 +346,15 @@ export default function Dashboardlayout() {
 
             {/* Quick action */}
             <button
-              onClick={() => navigate("/users", { state: { openAddUser: true } })}
+              onClick={() => navigate("/admin/users")}
               className="flex items-center gap-2 bg-gradient-to-br from-emerald-500 to-green-600
               text-white text-[13px] font-semibold px-5 py-2.5 rounded-xl shadow-md shadow-emerald-200
               hover:shadow-lg hover:shadow-emerald-300 hover:-translate-y-0.5 transition-all duration-200"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              Add User Details
+              Manage Users
             </button>
           </div>
 
@@ -544,23 +565,6 @@ function UserStatusBadge({ active }) {
     >
       <span className={`w-1.5 h-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-gray-300"}`} />
       {active ? "Active" : "Inactive"}
-    </span>
-  );
-}
-
-function AnalysisStatusBadge({ status }) {
-  const styles = {
-    completed: "bg-emerald-50 text-emerald-600 border-emerald-100",
-    processing: "bg-amber-50 text-amber-600 border-amber-100",
-    failed: "bg-red-50 text-red-500 border-red-100",
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase px-2.5 py-1 rounded-full border ${styles[status] || "bg-gray-50 text-gray-500 border-gray-200"}`}
-    >
-      <span className={`w-1.5 h-1.5 rounded-full ${status === "completed" ? "bg-emerald-500" : status === "processing" ? "bg-amber-500 animate-pulse" : status === "failed" ? "bg-red-500" : "bg-gray-400"}`} />
-      {status || "unknown"}
     </span>
   );
 }

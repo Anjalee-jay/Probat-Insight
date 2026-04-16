@@ -135,6 +135,10 @@ export default function Picupload() {
     setMsgType("info");
     try {
       const result = await uploadAnalysisImage({ file, handedness: "right" });
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("probat-dashboard-refresh"));
+        window.localStorage.setItem("probat-admin-uploads-refresh", String(Date.now()));
+      }
       setUploading(false);
       navigate("/analyzing", { state: { file, preview, result } });
     } catch (error) {

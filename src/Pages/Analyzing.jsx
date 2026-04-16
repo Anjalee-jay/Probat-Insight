@@ -49,7 +49,7 @@ export default function Analyzing() {
     let index = 0;
     const runStage = () => {
       if (index >= STAGES.length) {
-        setTimeout(() => navigate("/results", { state: { result } }), 1500);
+        setTimeout(() => navigate("/results", { state: { result, preview } }), 1500);
         return;
       }
       let step = 0;

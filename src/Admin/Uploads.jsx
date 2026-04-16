@@ -1,28 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Sidebar from "../Components/Sidebar";
 import AdminNavbar from "../Components/AdminNavbar";
-import { uploadAnalysisImage } from "../services/uploadsApi";
+import { uploadAnalysisImage, getImages, deleteImage } from "../services/uploadsApi";
+
+// Import API_BASE_URL for image display
+const API_BASE_URL = (() => {
+  const configuredBaseUrl = process.env.REACT_APP_API_BASE_URL?.trim();
+  if (configuredBaseUrl) {
+    return configuredBaseUrl.replace(/\/$/, "");
+  }
+  return "http://127.0.0.1:8000";
+})();
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Syne:wght@700;800&family=Outfit:wght@400;500;600;700;800&display=swap');`;
-const UPLOADS_STORAGE_KEY = "probat-admin-uploads";
-const DASHBOARD_REFRESH_EVENT = "probat-dashboard-refresh";
-
-function loadStoredUploads() {
-  if (typeof window === "undefined") {
-    return [];
-  }
-
-  try {
-    const raw = window.localStorage.getItem(UPLOADS_STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
 
 function formatFileSize(sizeInBytes) {
   if (!Number.isFinite(sizeInBytes) || sizeInBytes <= 0) {
@@ -139,19 +130,63 @@ function EmptyState() {
 }
 
 export default function Uploads() {
+  const navigate = useNavigate();
   const [filter, setFilter]   = useState("all");
   const [search, setSearch]   = useState("");
   const [dragging, setDragging] = useState(false);
-  const [uploads, setUploads] = useState(() => loadStoredUploads());
+  const [uploads, setUploads] = useState([]);
+  const [loading, setLoading] = useState(true);
   const inputRef = useRef();
 
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
+  const loadImagesFromAPI = async () => {
+    try {
+      const response = await getImages();
+      // Transform API response to match our component's expected format
+      const transformedUploads = response.images.map(img => ({
+        id: img.id,
+        filename: img.filename,
+        player: img.player,
+        size: img.size,
+        uploadedAt: img.uploaded_at,
+        uploadedAtIso: img.uploaded_at_iso || new Date(img.uploaded_at).toISOString(),
+        status: img.status,
+        analysis: img.analysis,
+        score: img.score,
+        grade: img.grade,
+        modelUsed: img.model_used,
+        error: img.error,
+        imageId: img.id, // Add imageId for consistency
+      }));
+      setUploads(transformedUploads);
+    } catch (err) {
+      console.error("Failed to load images:", err);
+      // Fallback to empty array
+      setUploads([]);
+    } finally {
+      setLoading(false);
     }
-    window.localStorage.setItem(UPLOADS_STORAGE_KEY, JSON.stringify(uploads));
-    window.dispatchEvent(new CustomEvent(DASHBOARD_REFRESH_EVENT, { detail: { source: "uploads" } }));
-  }, [uploads]);
+  };
+
+  useEffect(() => {
+    loadImagesFromAPI();
+
+    const handleUploadsRefresh = () => {
+      void loadImagesFromAPI();
+    };
+
+    const handleStorageEvent = (event) => {
+      if (event.key === "probat-admin-uploads-refresh") {
+        void loadImagesFromAPI();
+      }
+    };
+
+    window.addEventListener("probat-dashboard-refresh", handleUploadsRefresh);
+    window.addEventListener("storage", handleStorageEvent);
+    return () => {
+      window.removeEventListener("probat-dashboard-refresh", handleUploadsRefresh);
+      window.removeEventListener("storage", handleStorageEvent);
+    };
+  }, []);
 
   const FILTERS = [
     { id: "all",        label: "All",        count: uploads.length },
@@ -177,20 +212,11 @@ export default function Uploads() {
       uploadedAt: formatUploadedAt(now),
       uploadedAtIso: now.toISOString(),
       status: "processing",
+      imageId: null, // Will be set when upload completes
     };
 
     setUploads((prev) => [item, ...prev]);
     return item.id;
-  };
-
-  const updateUploadStatus = (id, status, extra = {}) => {
-    setUploads((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? { ...item, status, ...extra }
-          : item
-      )
-    );
   };
 
   const handleSingleUpload = async (file) => {
@@ -198,30 +224,47 @@ export default function Uploads() {
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      const tooLargeId = addPendingUpload(file);
-      updateUploadStatus(tooLargeId, "failed", {
-        error: "File exceeds 10MB limit",
-      });
+      alert("File exceeds 10MB limit");
       return;
     }
 
+    // Optimistically add to UI
     const pendingId = addPendingUpload(file);
 
     try {
-      const responseData = await uploadAnalysisImage({ file });
-      updateUploadStatus(pendingId, "completed", {
-        analysis: responseData,
-        score: Number.isFinite(Number(responseData?.scores?.overall))
-          ? Math.round(Number(responseData.scores.overall))
-          : null,
-        grade: responseData?.grade || null,
-        modelUsed: responseData?.model_used || null,
-      });
+      await uploadAnalysisImage({ file });
+      // Refresh from API to get the latest data
+      await loadImagesFromAPI();
     } catch (err) {
-      updateUploadStatus(pendingId, "failed", {
-        error: err?.message || "Upload failed",
-      });
+      // Remove the pending item and show error
+      setUploads(prev => prev.filter(u => u.id !== pendingId));
+      alert(`Upload failed: ${err?.message || "Unknown error"}`);
     }
+  };
+
+  const handleDeleteImage = async (imageId) => {
+    if (!window.confirm("Are you sure you want to delete this image?")) {
+      return;
+    }
+
+    try {
+      await deleteImage(imageId);
+      await loadImagesFromAPI(); // Refresh the list
+    } catch (err) {
+      alert(`Failed to delete image: ${err?.message || "Unknown error"}`);
+    }
+  };
+
+  const handleViewAnalysis = (upload) => {
+    // Navigate to Results page with the image data
+    navigate("/results", {
+      state: {
+        result: upload.analysis,
+        preview: `${API_BASE_URL}/api/images/${upload.imageId}/data`,
+        img_carc: `${API_BASE_URL}/api/images/${upload.imageId}/data`,
+        upload: upload,
+      },
+    });
   };
 
   const handleFiles = (fileList) => {
@@ -317,40 +360,78 @@ export default function Uploads() {
 
           {/* Table */}
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-gray-50/60 border-b border-gray-100">
-                  {["File", "Player", "Size", "Uploaded", "Status", ""].map(col => (
-                    <th key={col} className="text-left px-6 py-3.5 text-[10.5px] font-bold tracking-[0.12em] uppercase text-gray-400 whitespace-nowrap">{col}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length === 0 ? <EmptyState /> : filtered.map((u, i) => (
-                  <tr key={i} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors group">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0">
-                          <Ico d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" cls="w-5 h-5 text-gray-400" sw="1.5" />
-                        </div>
-                        <p className="text-[13px] font-semibold text-gray-800">{u.filename}</p>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-[13px] text-gray-600">{u.player ?? "—"}</td>
-                    <td className="px-6 py-4 text-[12px] text-gray-400">{u.size ?? "—"}</td>
-                    <td className="px-6 py-4 text-[12px] text-gray-400">{u.uploadedAt ?? "—"}</td>
-                    <td className="px-6 py-4"><StatusBadge status={u.status} /></td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-red-50 hover:text-red-500 flex items-center justify-center text-gray-400 transition-colors">
-                          <Ico d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" cls="w-3.5 h-3.5" sw="2" />
-                        </button>
-                      </div>
-                    </td>
+            {loading ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="text-center">
+                  <div className="w-8 h-8 border-2 border-emerald-200 border-t-emerald-500 rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-[14px] font-semibold text-gray-600">Loading uploads...</p>
+                </div>
+              </div>
+            ) : (
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-gray-50/60 border-b border-gray-100">
+                    {["File", "Player", "Size", "Uploaded", "Status", ""].map(col => (
+                      <th key={col} className="text-left px-6 py-3.5 text-[10.5px] font-bold tracking-[0.12em] uppercase text-gray-400 whitespace-nowrap">{col}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filtered.length === 0 ? <EmptyState /> : filtered.map((u, i) => (
+                    <tr key={u.imageId || i} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors group">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                            {u.imageId ? (
+                              <img
+                                src={`${API_BASE_URL}/api/images/${u.imageId}/data`}
+                                alt={u.filename}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  // Fallback to icon if image fails to load
+                                  e.target.style.display = 'none';
+                                  e.target.nextElementSibling.style.display = 'block';
+                                }}
+                              />
+                            ) : null}
+                            <Ico
+                              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                              cls="w-5 h-5 text-gray-400"
+                              sw="1.5"
+                              style={{ display: u.imageId ? 'none' : 'block' }}
+                            />
+                          </div>
+                          <p className="text-[13px] font-semibold text-gray-800">{u.filename}</p>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-[13px] text-gray-600">{u.player ?? "—"}</td>
+                      <td className="px-6 py-4 text-[12px] text-gray-400">{u.size ?? "—"}</td>
+                      <td className="px-6 py-4 text-[12px] text-gray-400">{u.uploadedAt ?? "—"}</td>
+                      <td className="px-6 py-4"><StatusBadge status={u.status} /></td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {u.status === "completed" && (
+                            <button
+                              onClick={() => handleViewAnalysis(u)}
+                              className="w-8 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-600 flex items-center justify-center text-emerald-400 transition-colors"
+                              title="View Analysis"
+                            >
+                              <Ico d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.658 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" cls="w-3.5 h-3.5" sw="2" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeleteImage(u.imageId)}
+                            className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-red-50 hover:text-red-500 flex items-center justify-center text-gray-400 transition-colors"
+                          >
+                            <Ico d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" cls="w-3.5 h-3.5" sw="2" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
 
         </main>
